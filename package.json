@@ -31,7 +31,7 @@
 		"svgo": "find p/ docs/ -name '*.svg' -exec svgo {} + | awk '/:$/{name=$0;next} /KiB/ && !/ - 0% /{print name; print}'",
 		"stylelint": "stylelint '**/*.css'",
 		"stylelint_fix": "stylelint --fix '**/*.css'",
-		"test:frontend": "node --test tests/frontend",
+		"test:frontend": "node --test 'tests/frontend/**/*.test.mjs'",
 		"test:browser": "playwright test --config tests/browser/config/default.config.mjs",
 		"test:browser:appearance": "playwright test --config tests/browser/config/appearance.config.mjs",
 		"test:browser:reading": "playwright test --config tests/browser/config/reading-interactions.config.mjs",

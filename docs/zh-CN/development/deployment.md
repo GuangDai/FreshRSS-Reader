@@ -124,6 +124,11 @@ GitHub Actions 在拉取请求和主分支提交上运行代码检查、应用�
 冒烟测试使用临时容器和匿名数据卷，检查安装页面、PHP 扩展、SQLite 安装、刷新 worker 和本地 RSS 文章入库，结束时自动清理。
 主分支测试通过后，发布 `linux/amd64`、`linux/arm64` 镜像到 GHCR；测试失败时不会更新发布标签。
 
+GitHub 首次创建 GHCR 包时默认设为私有，即使源码仓库公开也不会自动公开镜像。
+维护者需要在[镜像设置](https://github.com/users/GuangDai/packages/container/freshrss-reader/settings)中选择 **Change visibility → Public**，确认包名 `freshrss-reader`。
+这项设置只需完成一次；后续 CI 使用仓库自带的 `GITHUB_TOKEN` 发布，无需另设镜像仓库密码。
+包可见性目前没有官方 REST 或 GraphQL 修改接口，操作依据见 [GitHub 包权限说明](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#configuring-visibility-of-packages-for-your-personal-account)。
+
 运行状态与手动刷新：
 
 ```sh

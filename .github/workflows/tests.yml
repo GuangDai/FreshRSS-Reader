@@ -33,6 +33,28 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      - name: Install libcurl for decoded response size tests
+        # The native decoded-byte limit tested below requires libcurl 8.20 or newer.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential pkg-config libssl-dev libpsl-dev zlib1g-dev
+          curl_build="$RUNNER_TEMP/freshrss-curl-build"
+          curl_prefix="$RUNNER_TEMP/freshrss-curl"
+          mkdir -p "$curl_build"
+          curl --fail --location --retry 3 --output "$curl_build/curl.tar.xz" https://github.com/curl/curl/releases/download/curl-8_22_0/curl-8.22.0.tar.xz
+          echo "f7ef3ae8a22e521f289803fe93543eb64c329b58aa73a9e224dfd915a2a5f4f7  $curl_build/curl.tar.xz" | sha256sum --check
+          tar -xf "$curl_build/curl.tar.xz" -C "$curl_build"
+          cd "$curl_build/curl-8.22.0"
+          ./configure --prefix="$curl_prefix" --enable-shared --disable-static --enable-versioned-symbols --with-openssl --with-ca-bundle=/etc/ssl/certs/ca-certificates.crt
+          make -C lib -j"$(nproc)"
+          make -C lib install
+          echo "LD_LIBRARY_PATH=$curl_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Verify PHP uses the required libcurl
+        run: |
+          php --ri curl
+          php -r '$version = curl_version()["version"]; if ($version !== "8.22.0") { fwrite(STDERR, "Expected libcurl 8.22.0, got $version\n"); exit(1); }'
+
       - name: Install locked PHP dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
@@ -156,7 +178,7 @@ jobs:
 
       - name: Test real schemas, contracts and concurrent writes
         run: |
-          postgres_bin=$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -type f -name initdb -printf '%h\n' | sort -V | tail -n1)
+          postgres_bin=$(find /usr/lib/postgresql -mindepth 3 -maxdepth 3 -type f -name initdb -printf '%h\n' | sort -V | tail -n1)
           python3 tests/integration/database/matrix.py --php php --postgres-bin "$postgres_bin"
 
   scripts:
