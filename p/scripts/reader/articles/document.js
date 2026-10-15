@@ -65,8 +65,10 @@ export function articleDocument(article, preferences, theme, allowImages = false
 		const href = safeLink(link.getAttribute('href'));
 		if (href) { link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer'; } else link.removeAttribute('href');
 	});
+	let imagesHiddenByPrivacy = false;
 	content.querySelectorAll('img').forEach(img => {
 		if (!allowImages || !safeLink(img.getAttribute('src'))) {
+			if (!allowImages) imagesHiddenByPrivacy = true;
 			const caption = document.createElement('span'); caption.className = 'meta';
 			caption.textContent = img.getAttribute('alt') || labels.image || 'Image blocked';
 			img.replaceWith(caption); return;
@@ -78,6 +80,9 @@ export function articleDocument(article, preferences, theme, allowImages = false
 	const csp = `default-src 'none'; img-src ${allowImages ? 'https: http:' : "'none'"}; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`;
 	const byline = labels.byline ?? article.author;
 	const metadata = byline ? '<p class="meta">' + escapeHtml(byline) + '</p>' : '';
+	const imageNotice = imagesHiddenByPrivacy
+		? '<p class="meta article-image-notice">' + escapeHtml(labels.imagePrivacy || 'Images are hidden by your privacy settings.') + '</p>'
+		: '';
 	return `<!doctype html><html lang="${escapeHtml(language)}" dir="${direction}"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="${escapeHtml(csp)}">
 <style>html{color-scheme:${palette.dark ? 'dark' : 'light'};background:${palette.surface};color:${palette.text}}
@@ -104,5 +109,5 @@ svg{display:none}
 @media(max-height:480px){body{padding-top:max(10px,env(safe-area-inset-top))}h1{margin-block:.35em .4em}}
 @media(forced-colors:active){html,body,pre,th{background:Canvas;color:CanvasText}
 .meta,figcaption{color:CanvasText}a{color:LinkText}pre,td,th,hr{border-color:CanvasText}blockquote{border-color:LinkText}}
-</style></head><body dir="auto"><h1>${escapeHtml(article.title)}</h1>${metadata}${template.innerHTML}</body></html>`;
+</style></head><body dir="auto"><h1>${escapeHtml(article.title)}</h1>${metadata}${imageNotice}${template.innerHTML}</body></html>`;
 }

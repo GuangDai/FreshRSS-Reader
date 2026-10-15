@@ -65,4 +65,9 @@ final class PreferencesTest extends TestCase {
 			'refreshInterval' => 0, 'requestTimeout' => 0], $schema));
 	}
 
+	public function testImagesLoadByDefaultAndPreserveAnExplicitPrivacyChoice(): void {
+		self::assertTrue(Preferences::preferences([])['remoteImages']);
+		self::assertFalse(Preferences::preferences(['remoteImages' => false])['remoteImages']);
+	}
+
 }

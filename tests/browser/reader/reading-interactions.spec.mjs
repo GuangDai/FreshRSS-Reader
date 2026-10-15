@@ -15,6 +15,20 @@ async function selectSection(page, section) {
 	await expect(page.locator(`[data-settings-panel="${section}"]`)).toBeVisible();
 }
 
+async function fixedControlGeometry(page, ids) {
+	return Object.fromEntries(await Promise.all(ids.map(async id => [id, await page.locator('#' + id).boundingBox()])));
+}
+
+async function expectFixedControls(page, expected, stage) {
+	for (const [id, before] of Object.entries(expected)) {
+		await expect(page.locator('#' + id), `${stage}: ${id}`).toBeVisible();
+		const after = await page.locator('#' + id).boundingBox();
+		for (const dimension of ['x', 'y', 'width', 'height']) {
+			expect(Math.abs(after[dimension] - before[dimension]), `${stage}: ${id} ${dimension}`).toBeLessThan(0.5);
+		}
+	}
+}
+
 async function observeSearch(page) {
 	const searches = [];
 	await page.route(url => url.searchParams.get('c') === 'reader' && url.searchParams.get('a') === 'items', async route => {
@@ -207,11 +221,14 @@ test('choosing a pending article again reuses its request and accepts the eventu
 	} finally { release(); }
 });
 
-test('single-page reading hides unavailable page actions and removes the footer when every article is read', async ({ page, reader }) => {
+test('single-page navigation keeps its fixed slots when every article becomes read', async ({ page, reader }) => {
 	await expect(page.locator('#previous-page, #next-page')).toHaveCount(2);
-	await expect(page.locator('#previous-page')).toBeHidden();
-	await expect(page.locator('#next-page')).toBeHidden();
+	await expect(page.locator('#previous-page')).toBeVisible();
+	await expect(page.locator('#previous-page')).toBeDisabled();
+	await expect(page.locator('#next-page')).toBeVisible();
+	await expect(page.locator('#next-page')).toBeDisabled();
 	await expect(page.locator('#mark-page-read')).toBeVisible();
+	const positions = await fixedControlGeometry(page, ['previous-page', 'mark-page-read', 'next-page']);
 	const batches = [];
 	let listRequests = 0;
 	const readItems = ['100', '99', '98', '97'].map(id => ({ id, title: `Read article ${id}`, feedId: 1, date: 1791800000, read: true, starred: false }));
@@ -232,10 +249,12 @@ test('single-page reading hides unavailable page actions and removes the footer 
 	await expect.poll(() => listRequests).toBe(1);
 	await expect(page.locator('#article-list')).toHaveAttribute('aria-busy', 'false');
 	await expect(page.locator('.entry-card[data-read=false]')).toHaveCount(0);
-	await expect(page.locator('.pagination')).toBeHidden();
+	await expect(page.locator('.pagination')).toBeVisible();
+	await expect(page.locator('#mark-page-read')).toBeDisabled();
+	await expectFixedControls(page, positions, 'all articles read');
 	expect(batches).toHaveLength(1);
 	expect(batches[0]).toMatchObject({ ids: ['100', '99', '98', '97'], read: true });
-	// The batch contract refreshes authoritative state once; hiding controls never fetches another page.
+	// Refresh authoritative state once without moving the navigation controls or fetching another page.
 	await page.evaluate(() => new Promise(resolve => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve))));
 	expect(listRequests).toBe(1);
 });
@@ -259,16 +278,19 @@ test('multi-page results keep both navigation boundaries and allow moving forwar
 	await expect(page.locator('#previous-page')).toBeDisabled();
 	await expect(page.locator('#next-page')).toBeVisible();
 	await expect(page.locator('#next-page')).toBeEnabled();
+	const positions = await fixedControlGeometry(page, ['previous-page', 'mark-page-read', 'next-page']);
 	await page.locator('#next-page').click();
 	await expect(page.locator('.entry-card').first()).toHaveAttribute('data-id', '98');
 	await expect(page.locator('#previous-page')).toBeVisible();
 	await expect(page.locator('#previous-page')).toBeEnabled();
 	await expect(page.locator('#next-page')).toBeVisible();
 	await expect(page.locator('#next-page')).toBeDisabled();
+	await expectFixedControls(page, positions, 'last list page');
 	await page.locator('#previous-page').click();
 	await expect(page.locator('.entry-card').first()).toHaveAttribute('data-id', '100');
 	await expect(page.locator('#previous-page')).toBeDisabled();
 	await expect(page.locator('#next-page')).toBeEnabled();
+	await expectFixedControls(page, positions, 'first list page');
 	expect(reader.writes).toHaveLength(0);
 });
 
@@ -377,12 +399,10 @@ test('an empty search offers one clear action that recovers the current stream i
 	expect(reader.writes).toHaveLength(0);
 });
 
-test('original articles open directly and image controls only appear for blocked images', async ({ page, reader }) => {
+test('original articles open directly without a separate image action', async ({ page, reader }) => {
 	await page.locator('.entry-card').first().click();
 	await expect(page.locator('#article-frame')).toBeVisible();
-	await expect(page.locator('.article-menu')).toHaveCount(0);
-	await expect(page.locator('#original-link')).toBeVisible();
-	await expect(page.locator('#load-images')).toBeHidden();
+	await expect(page.locator('.article-menu, #load-images')).toHaveCount(0);
 	await expect(page.locator('#original-link')).toHaveAttribute('href', 'https://example.org/article/0');
 	await page.context().route('https://example.org/article/*', route => route.fulfill({ contentType: 'text/html', body: '<p>Original article fixture</p>' }));
 	const opened = page.waitForEvent('popup');
@@ -390,32 +410,168 @@ test('original articles open directly and image controls only appear for blocked
 	const popup = await opened;
 	await expect.poll(() => popup.url()).toBe('https://example.org/article/0');
 	await popup.close();
-	await page.route(url => url.searchParams.get('c') === 'reader' && url.searchParams.get('a') === 'article', route =>
-		route.fulfill({
-			json: {
-				version: 1,
-				article: {
-					id: '99',
-					title: '图片文章',
-					feedId: 2,
-					author: '',
-					date: 1791800000,
-					read: false,
-					starred: false,
-					link: '',
-					content: '<p>本地图片文章</p><img src="https://example.org/image.jpg" alt="照片">'
-				}
-			}
-		}));
-	await page.locator('#close-article').click();
-	await page.locator('.entry-card').nth(1).click();
-	await expect(page.locator('#original-link')).toBeHidden();
-	await expect(page.locator('#load-images')).toBeVisible();
-	await expect(page.frameLocator('#article-frame').locator('img')).toHaveCount(0);
-	await page.locator('#load-images').click();
-	await expect(page.frameLocator('#article-frame').locator('img')).toHaveCount(1);
-	await expect(page.locator('#load-images')).toBeHidden();
 	expect(reader.writes).toHaveLength(0);
+});
+
+const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNQAAAABJRU5ErkJggg==', 'base64');
+const imageContent = '<p>本地图片文章</p><img src="https://example.org/image.png" onerror="parent.document.body.dataset.intruded=1" alt="文章照片">' +
+	'<script src="https://example.org/tracker.js"></script><iframe src="https://example.org/embed"></iframe>' +
+	'<object data="https://example.org/object"></object><form><input></form><a href="javascript:alert(1)">unsafe</a>';
+
+async function imageArticle(page) {
+	const requests = [];
+	await page.route('https://example.org/**', route => {
+		requests.push(new URL(route.request().url()).pathname);
+		return route.request().url().endsWith('/image.png')
+			? route.fulfill({ body: pixel, contentType: 'image/png' })
+			: route.abort();
+	});
+	await page.route(url => url.searchParams.get('a') === 'article', route => route.fulfill({
+		json: {
+			version: 1,
+			article: {
+				id: '100',
+				title: '图片文章',
+				feedId: 1,
+				author: '',
+				date: 1791800000,
+				read: false,
+				starred: false,
+				link: '',
+				content: imageContent
+			}
+		},
+	}));
+	return requests;
+}
+
+test('images load by default without another click while scripts, embeds and parent access remain blocked', async ({ page, reader }) => {
+	expect(reader.bootstrap.schema.remoteImages.default).toBe(true);
+	expect(reader.preferences.remoteImages).toBe(true);
+	const requests = await imageArticle(page);
+	await page.locator('.entry-card').first().click();
+	const frame = page.frameLocator('#article-frame');
+	await expect(frame.getByText('本地图片文章')).toBeVisible();
+	const image = frame.getByRole('img', { name: '文章照片' });
+	await expect(image).toHaveAttribute('referrerpolicy', 'no-referrer');
+	await expect(image).not.toHaveAttribute('onerror');
+	await image.scrollIntoViewIfNeeded();
+	await expect.poll(() => image.evaluate(node => node.complete && node.naturalWidth > 0)).toBe(true);
+	await expect(frame.locator('script, iframe, object, embed, form, input, [href^="javascript:"]')).toHaveCount(0);
+	await expect(frame.locator('.article-image-notice')).toHaveCount(0);
+	await expect(page.locator('#load-images')).toHaveCount(0);
+	expect(requests).toEqual(['/image.png']);
+	const contentFrame = await (await page.locator('#article-frame').elementHandle()).contentFrame();
+	expect(await contentFrame.evaluate(() => { try { return Boolean(globalThis.parent.document.body); } catch { return false; } })).toBe(false);
+	expect(await page.locator('body').getAttribute('data-intruded')).toBeNull();
+	expect(reader.writes).toHaveLength(0);
+});
+
+test('disabling remote images in privacy blocks requests without a per-article show button', async ({ page, reader }) => {
+	await openSettings(page); await selectSection(page, 'privacy');
+	await page.locator('[name=remoteImages]').uncheck();
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	await page.locator('#cancel-settings').click();
+	const requests = await imageArticle(page);
+	await page.locator('.entry-card').first().click();
+	const frame = page.frameLocator('#article-frame');
+	await expect(frame.getByText('本地图片文章')).toBeVisible();
+	await expect(frame.locator('img, script, iframe, object, form, input')).toHaveCount(0);
+	await expect(frame.locator('.article-image-notice')).toHaveCount(1);
+	await expect(frame.locator('.article-image-notice')).toContainText(/隐私/);
+	await expect(frame.getByText('文章照片', { exact: true })).toBeVisible();
+	await expect(page.locator('#load-images')).toHaveCount(0);
+	expect(requests).toEqual([]);
+	expect(reader.preferences.remoteImages).toBe(false);
+	expect(reader.writes.filter(write => write.action === 'preferences')).toHaveLength(1);
+});
+
+test('article navigation stays fixed through read states, media, errors, scrolling and the next batch', async ({ page, reader }) => {
+	const articles = Array.from({ length: 6 }, (_, index) => ({
+		id: String(100 - index),
+		title: '固定导航文章 ' + (index + 1),
+		feedId: index % 2 + 1,
+		author: '',
+		date: 1791800000,
+		read: index === 1,
+		starred: index === 1,
+		link: index % 2 ? '' : 'https://example.org/article/' + index,
+		content: '<p>正文滚动不会移动上一篇、下一篇或已读收藏按钮。</p>'.repeat(80) +
+			(index % 2 ? '' : '<img src="https://example.org/geometry.png" alt="文章配图">'),
+	}));
+	let releaseArticle; let articleStarted; let releasePage; let pageStarted;
+	const articleGate = new Promise(resolve => { releaseArticle = resolve; });
+	const articleRequest = new Promise(resolve => { articleStarted = resolve; });
+	const pageGate = new Promise(resolve => { releasePage = resolve; });
+	const pageRequest = new Promise(resolve => { pageStarted = resolve; });
+	const stateWrites = []; const cursors = [];
+	await page.route('https://example.org/geometry.png', route => route.fulfill({ body: pixel, contentType: 'image/png' }));
+	await page.route(url => url.searchParams.get('c') === 'reader' && ['items', 'article', 'state'].includes(url.searchParams.get('a')), async route => {
+		const url = new URL(route.request().url()); const action = url.searchParams.get('a');
+		if (action === 'items') {
+			const cursor = url.searchParams.get('cursor') || ''; cursors.push(cursor);
+			if (cursor) { pageStarted(); await pageGate; }
+			return route.fulfill({ json: { version: 1, items: cursor ? articles.slice(4) : articles.slice(0, 4), next: cursor ? null : '97' } });
+		}
+		if (action === 'state') {
+			const change = route.request().postDataJSON(); stateWrites.push(change);
+			const article = articles.find(item => item.id === change.id); Object.assign(article, change);
+			return route.fulfill({ json: { version: 1, read: article.read, starred: article.starred } });
+		}
+		const id = url.searchParams.get('id');
+		if (id === '98') { articleStarted(); await articleGate; }
+		if (id === '97') return route.fulfill({ status: 503, json: { version: 1, error: 'article_unavailable' } });
+		return route.fulfill({ json: { version: 1, article: articles.find(item => item.id === id) } });
+	});
+	await page.reload();
+	try {
+		await page.locator('.entry-card').first().click();
+		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[0].title);
+		await expect(page.locator('#original-link')).toBeVisible();
+		await expect(page.frameLocator('#article-frame').locator('img')).toHaveCount(1);
+		const positions = await fixedControlGeometry(page, ['previous-article', 'mark-read', 'mark-star', 'next-article']);
+		for (const [id, pressed] of [['mark-read', 'true'], ['mark-read', 'false'], ['mark-star', 'true'], ['mark-star', 'false']]) {
+			await page.locator('#' + id).click();
+			await expect(page.locator('#' + id)).toHaveAttribute('aria-pressed', pressed);
+			await expect(page.locator('#' + id)).toBeEnabled();
+			await expectFixedControls(page, positions, id + ' ' + pressed);
+		}
+		await page.frameLocator('#article-frame').locator('html').evaluate(() => globalThis.scrollTo(0, 600));
+		await expect.poll(() => page.frameLocator('#article-frame').locator('html').evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+		await expectFixedControls(page, positions, 'scrolled article');
+		await page.locator('#next-article').click();
+		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[1].title);
+		await expect(page.locator('#original-link')).toBeHidden();
+		await expect(page.frameLocator('#article-frame').locator('img')).toHaveCount(0);
+		await expect(page.locator('#mark-read')).toHaveAttribute('aria-pressed', 'true');
+		await expect(page.locator('#mark-star')).toHaveAttribute('aria-pressed', 'true');
+		await expectFixedControls(page, positions, 'read starred article without images or original link');
+		await page.locator('#next-article').click(); await articleRequest;
+		await expect(page.locator('#article-pane')).toHaveAttribute('aria-busy', 'true');
+		await expectFixedControls(page, positions, 'pending article');
+		releaseArticle();
+		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[2].title);
+		await expect(page.locator('#original-link')).toBeVisible();
+		await expectFixedControls(page, positions, 'loaded image article');
+		await page.locator('#next-article').click();
+		await expect(page.locator('#article-status')).toBeVisible();
+		await expect(page.locator('#article-pane')).toHaveAttribute('aria-busy', 'false');
+		await expectFixedControls(page, positions, 'failed article');
+		await page.locator('#next-article').click(); await pageRequest;
+		await expect(page.locator('.article-navigation')).toHaveAttribute('aria-busy', 'true');
+		await expectFixedControls(page, positions, 'loading next batch');
+		releasePage();
+		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[4].title);
+		await expectFixedControls(page, positions, 'first article in next batch');
+		await page.locator('#next-article').click();
+		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[5].title);
+		await expect(page.locator('#next-article')).toBeDisabled();
+		await expectFixedControls(page, positions, 'last article with disabled next');
+		expect(cursors).toEqual(['', '97']);
+		expect(stateWrites).toHaveLength(4);
+		expect(reader.writes.filter(write => write.action === 'preferences')).toHaveLength(0);
+	} finally { releaseArticle(); releasePage(); }
 });
 
 test('unchanged settings need no save and reverting a draft disables saving again', async ({ page, reader }) => {

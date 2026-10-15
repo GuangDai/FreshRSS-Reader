@@ -50,7 +50,6 @@ const articleDateFormatter = new Intl.DateTimeFormat(bootstrap.language, { dateS
 let renderedItems = null;
 const entryNodes = new Map();
 let frameKey = '';
-let imageArticle = null;
 let appearancePalette = null;
 let refreshTimer = 0;
 let pageActive = true;
@@ -418,11 +417,8 @@ function renderFeedSelection() {
 
 function renderList() {
 	$('article-list').setAttribute('aria-busy', String(store.loading));
-	const canPage = Boolean(store.history.length || store.next);
 	const unread = store.items.some(item => !item.read);
-	$('previous-page').hidden = $('next-page').hidden = !canPage && !store.loading;
-	$('mark-page-read').hidden = Boolean(bootstrap.readOnly) || (!unread && !store.batchProgress && !store.pending.size);
-	document.querySelector('.pagination').hidden = !canPage && !store.loading && !unread && !store.batchProgress && !store.pending.size;
+	$('mark-page-read').hidden = Boolean(bootstrap.readOnly);
 	$('previous-page').disabled = store.loading || !store.history.length;
 	$('next-page').disabled = store.loading || !store.next;
 	$('mark-page-read').disabled = store.csrfInvalid || store.loading || store.pending.size > 0 ||
@@ -489,7 +485,7 @@ function renderArticle() {
 	$('article-empty').hidden = Boolean(article);
 	$('article-empty').querySelector('p').textContent = store.loadingArticle ? t('loading') : t('choose');
 	$('article-actions').hidden = !store.selectedId;
-	for (const id of ['load-images', 'original-link']) $(id).hidden = !article;
+	$('original-link').hidden = !article;
 	const index = store.items.findIndex(item => item.id === store.selectedId);
 	$('previous-article').disabled = !store.selectedId || (!articleNavigationPaging && store.loading) || (index === 0 && !store.history.length);
 	$('next-article').disabled = !store.selectedId || (!articleNavigationPaging && store.loading) || (index === store.items.length - 1 && !store.next);
@@ -514,8 +510,6 @@ function renderArticle() {
 	const link = safeLink(article.link);
 	$('original-link').hidden = !link;
 	if (link) $('original-link').href = link;
-	const images = current.remoteImages || imageArticle === article.id;
-	$('load-images').hidden = images || !/<img\b/i.test(article.content);
 	const date = typeof article.date === 'number' ? new Date(article.date * 1000) : null;
 	const metadata = [...new Set([
 		feedTree.feedsById.get(article.feedId)?.name?.trim(),
@@ -524,13 +518,15 @@ function renderArticle() {
 	].filter(Boolean))].join(' · ');
 	const palette = appearancePalette;
 	const key = JSON.stringify([article.id, current.style, current.fontSize, current.lineHeight,
-		current.readingWidth, palette, forcedColours.matches, images, metadata]);
+		current.readingWidth, palette, forcedColours.matches, current.remoteImages, metadata]);
 	if (key !== frameKey) {
 		frameKey = key;
 		// A new browsing context avoids accumulating srcdoc navigations in the browser's Back history.
 		const frame = $('article-frame').cloneNode(false);
 		frame.title = article.title;
-		frame.srcdoc = articleDocument(article, current, palette, images, { media: t('openMedia'), image: t('imagesOff'), byline: metadata });
+		frame.srcdoc = articleDocument(article, current, palette, current.remoteImages, {
+			media: t('openMedia'), image: t('imagesOff'), imagePrivacy: t('imagesPrivacyBlocked'), byline: metadata,
+		});
 		$('article-frame').replaceWith(frame);
 	}
 }
@@ -808,7 +804,6 @@ $('mark-star').addEventListener('click', () => {
 	const item = store.article || store.items.find(item => item.id === store.selectedId);
 	if (item) store.changeState(item.id, 'starred', !item.starred);
 });
-$('load-images').addEventListener('click', () => { imageArticle = store.article?.id; renderArticle(); });
 $('original-link').addEventListener('click', () => {
 	const article = store.article;
 	if (bootstrap.autoMarkSite && article && !article.read) { autoReadSelection = article.id; store.changeState(article.id, 'read', true); }

@@ -40,7 +40,7 @@ async function login(page) {
 
 // Real document, modules and styles; generated feed/article data and intercepted writes.
 // A viewport test must never change the shared preview account's preferences or subscriptions.
-async function openReader(page, preferences = {}, { next = null } = {}) {
+async function openReader(page, preferences = {}, { next = null, listResponse = () => ({ items, next }) } = {}) {
 	let listRequests = 0;
 	await page.route(url => url.searchParams.get('c') === 'reader', async route => {
 		const action = new URL(route.request().url()).searchParams.get('a');
@@ -67,7 +67,7 @@ async function openReader(page, preferences = {}, { next = null } = {}) {
 			});
 		} else if (action === 'items') {
 			listRequests++;
-			await route.fulfill({ json: { version: 1, items, next } });
+			await route.fulfill({ json: { version: 1, ...listResponse(new URL(route.request().url())) } });
 		} else if (action === 'article') {
 			await route.fulfill({
 				json: {
@@ -76,7 +76,8 @@ async function openReader(page, preferences = {}, { next = null } = {}) {
 						...items[0],
 						link: 'https://example.invalid/article',
 						content: `<p>Responsive article fixture</p><figure><figcaption>${longName}</figcaption></figure>` +
-					`<pre>${longName}</pre><table><tr>${'<td>wide table content</td>'.repeat(20)}</tr></table><blockquote>${longName}</blockquote>`
+					`<pre>${longName}</pre><table><tr>${'<td>wide table content</td>'.repeat(20)}</tr></table><blockquote>${longName}</blockquote>` +
+					'<p>Reading paragraph fixture</p>'.repeat(50)
 					}
 				}
 			});
@@ -263,8 +264,8 @@ test('touch controls remain usable on tablets beyond the mobile breakpoint', asy
 		await openReader(page);
 		for (const selector of ['.feed-button', '#quick-layout', '#open-settings', '#article-search input']) {
 			const target = await page.locator(selector).first().boundingBox();
-			expect(target.height).toBeGreaterThanOrEqual(44);
-			expect(target.width).toBeGreaterThanOrEqual(44);
+			expect(target.height, `${selector} touch height`).toBeGreaterThanOrEqual(44);
+			expect(target.width, `${selector} touch width`).toBeGreaterThanOrEqual(44);
 		}
 		await expect(page.locator('#article-search input')).toHaveCSS('font-size', '16px');
 		await page.locator('.entry-card').first().click();
@@ -272,9 +273,11 @@ test('touch controls remain usable on tablets beyond the mobile breakpoint', asy
 		const original = await page.locator('#original-link').boundingBox();
 		expect(original.width).toBeGreaterThanOrEqual(44);
 		expect(original.height).toBeGreaterThanOrEqual(44);
-		await expect(page.locator('#load-images')).toBeHidden();
+		await expect(page.locator('#load-images')).toHaveCount(0);
 		await page.locator('#close-article').click();
 		await openSettings(page);
+		await page.locator('[data-settings-section=reading]').click();
+		await expect(page.locator('[name=fontSize]')).toBeVisible();
 		expect(await page.locator('[name=fontSize]').evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
 	} finally { await context.close(); }
 });
@@ -350,7 +353,16 @@ test.describe('touch reading controls and long forms', () => {
 			await expect(page.locator('#original-link')).toBeVisible();
 			await expect(page.locator('#original-link')).toBeInViewport();
 			await expectContained(page.locator('.article-header'));
-			await expect(page.locator('#load-images')).toBeHidden();
+			await expect(page.locator('#load-images')).toHaveCount(0);
+			const next = await page.locator('#next-article').boundingBox();
+			await page.frameLocator('#article-frame').locator('html').evaluate(node => {
+				node.ownerDocument.scrollingElement.scrollTop = node.scrollHeight;
+			});
+			await expect.poll(() => page.frameLocator('#article-frame').locator('html').evaluate(node =>
+				node.ownerDocument.scrollingElement.scrollTop)).toBeGreaterThan(0);
+			const scrolledNext = await page.locator('#next-article').boundingBox();
+			for (const key of ['x', 'y', 'width', 'height']) expect(scrolledNext[key]).toBeCloseTo(next[key], 1);
+			expect((await page.locator('.article-navigation').boundingBox()).y).toBeCloseTo(navigation.y, 1);
 			await page.locator('#close-article').click();
 			await expect(page.locator('body')).toHaveAttribute('data-article-open', 'false');
 		});
@@ -434,25 +446,58 @@ test.describe('touch reading controls and long forms', () => {
 	});
 });
 
-for (const width of [240, 320]) {
+for (const width of [240, 320, 667, 1440]) {
 	test(`page navigation and page-read action share one reachable row at ${width}px`, async ({ page }) => {
 		await page.setViewportSize({ width, height: 568 });
-		await openReader(page, {}, { next: 'fixture-next-page' });
+		await openReader(page, {}, {
+			listResponse: url => url.searchParams.get('search') === 'empty'
+				? { items: [], next: null }
+				: url.searchParams.get('cursor')
+					? { items: items.map(item => ({ ...item, read: true })), next: null }
+					: { items, next: 'fixture-next-page' },
+		});
 		const bar = page.locator('.pagination');
+		await expect(bar).toBeVisible();
 		await expect(bar.locator('#mark-page-read')).toHaveCount(1);
 		await expect(page.locator('.batch-toolbar')).toHaveCount(0);
 		await expectContained(bar);
+		const initial = new Map();
 		let previous = null;
 		for (const id of ['previous-page', 'mark-page-read', 'next-page']) {
 			const button = page.locator('#' + id);
 			await expect(button).toBeInViewport();
 			const bounds = await button.boundingBox();
+			initial.set(id, bounds);
 			expect(bounds.height).toBeGreaterThanOrEqual(44 - 1 / 64);
 			if (previous) {
 				expect(bounds.x).toBeGreaterThanOrEqual(previous.x + previous.width);
 				expect(bounds.y).toBeCloseTo(previous.y, 0);
 			}
 			previous = bounds;
+		}
+		await expect(page.locator('#previous-page')).toBeDisabled();
+		await expect(page.locator('#next-page')).toBeEnabled();
+		await expect(page.locator('#mark-page-read')).toBeEnabled();
+		await page.locator('#next-page').click();
+		await expect(page.locator('#previous-page')).toBeEnabled();
+		await expect(page.locator('#next-page')).toBeDisabled();
+		await expect(page.locator('#mark-page-read')).toBeDisabled();
+		for (const [id, bounds] of initial) {
+			const button = page.locator('#' + id);
+			await expect(button).toBeInViewport();
+			const current = await button.boundingBox();
+			for (const key of ['x', 'y', 'width', 'height']) expect(current[key]).toBeCloseTo(bounds[key], 1);
+		}
+		await page.locator('#article-search input').fill('empty');
+		await page.locator('#article-search').evaluate(node => node.requestSubmit());
+		await expect(page.locator('.entry-card')).toHaveCount(0);
+		await expect(bar).toBeVisible();
+		for (const [id, bounds] of initial) {
+			const button = page.locator('#' + id);
+			await expect(button).toBeInViewport();
+			await expect(button).toBeDisabled();
+			const current = await button.boundingBox();
+			for (const key of ['x', 'y', 'width', 'height']) expect(current[key]).toBeCloseTo(bounds[key], 1);
 		}
 	});
 }

@@ -81,7 +81,7 @@
 				<section class="article-list-pane" aria-label="Articles">
 					<div class="article-list" id="article-list" aria-busy="false" tabindex="-1"></div>
 					<div class="pagination"><button type="button" id="previous-page" data-i18n="previous"><?= $readerText('上一页', 'Previous page') ?></button>
-						<button type="button" id="mark-page-read" data-i18n="markPageReadShort" data-title="markPageRead"><?= $readerText('本页标为已读', 'Mark this page read') ?></button>
+						<button type="button" id="mark-page-read" data-i18n="markPageReadShort" data-title="markPageRead"><?= $readerText('标为已读', 'Mark read') ?></button>
 						<button type="button" id="next-page" data-i18n="next"><?= $readerText('下一页', 'Next page') ?></button></div>
 				</section>
 				<section class="article-pane" id="article-pane" aria-label="Article">
@@ -90,7 +90,6 @@
 						<div class="article-header">
 							<button type="button" id="close-article" data-title="close" aria-label="关闭文章"><span class="reader-icon icon-previous" aria-hidden="true"></span></button>
 							<a id="original-link" target="_blank" rel="noopener noreferrer" data-i18n="original">查看原文</a>
-							<button type="button" id="load-images" data-title="images"><span class="reader-icon icon-images" aria-hidden="true"></span><span data-i18n="imagesShort">显示图片</span></button>
 						</div>
 						<div class="article-navigation" role="group" data-title="articleNavigation">
 							<button type="button" id="previous-article" data-title="previousArticle"><span class="reader-icon icon-previous" aria-hidden="true"></span><span class="action-label" data-i18n="previousArticle">上一篇</span></button>

@@ -27,7 +27,7 @@ final class Preferences {
 		'readingWidth' => ['type' => 'integer', 'default' => 800, 'min' => 280, 'max' => 3840, 'unit' => 'px'],
 		'sidebarWidth' => ['type' => 'integer', 'default' => 240, 'min' => 160, 'max' => 600, 'unit' => 'px'],
 		'listWidth' => ['type' => 'integer', 'default' => 360, 'min' => 240, 'max' => 1000, 'unit' => 'px'],
-		'remoteImages' => ['type' => 'boolean', 'default' => false],
+		'remoteImages' => ['type' => 'boolean', 'default' => true],
 		'pageSize' => ['type' => 'integer', 'default' => 50, 'min' => 1, 'max' => 200, 'unit' => 'articles'],
 		'cacheArticles' => ['type' => 'integer', 'default' => 12, 'min' => 0, 'max' => 200, 'unit' => 'articles'],
 		'cacheMiB' => ['type' => 'integer', 'default' => 4, 'min' => 0, 'max' => 64, 'unit' => 'MiB'],

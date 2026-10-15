@@ -111,10 +111,11 @@ export class AppearanceChoices {
 			gallery.status = this.element('span', 'theme-gallery-page'); gallery.status.setAttribute('role', 'status');
 			gallery.status.setAttribute('aria-live', 'polite'); gallery.status.setAttribute('aria-atomic', 'true');
 			gallery.next = this.element('button', '', this.t('appearanceThemeNext')); gallery.next.type = 'button'; gallery.next.dataset.themePage = 'next';
-			gallery.previous.addEventListener('click', () => { gallery.page--; this.renderChoices(key); });
-			gallery.next.addEventListener('click', () => { gallery.page++; this.renderChoices(key); });
+			gallery.previous.addEventListener('click', () => { gallery.page--; this.renderChoices(key); gallery.content.scrollTop = 0; });
+			gallery.next.addEventListener('click', () => { gallery.page++; this.renderChoices(key); gallery.content.scrollTop = 0; });
 			gallery.pagination.append(gallery.previous, gallery.status, gallery.next);
-			fieldset.append(grid, gallery.empty, gallery.pagination);
+			gallery.content = this.element('div', 'theme-gallery-content'); gallery.content.append(grid, gallery.empty);
+			fieldset.append(gallery.content, gallery.pagination);
 		} else fieldset.append(grid);
 		this.groups.set(key, { fieldset, choices, current, grid, gallery }); this.sync(this.values, this.saved);
 		return fieldset;
@@ -126,14 +127,14 @@ export class AppearanceChoices {
 		gallery.search = this.element('input'); gallery.search.type = 'search'; gallery.search.dataset.themeSearch = key;
 		gallery.search.placeholder = this.t('appearanceThemeSearchHint'); gallery.search.autocomplete = 'off';
 		gallery.search.addEventListener('input', () => {
-			gallery.query = gallery.search.value.trim().toLocaleLowerCase(); gallery.page = 0; this.renderChoices(key);
+			gallery.query = gallery.search.value.trim().toLocaleLowerCase(); gallery.page = 0; this.renderChoices(key); gallery.content.scrollTop = 0;
 		});
 		label.append(gallery.search); controls.append(label);
 		const filters = this.element('div', 'theme-gallery-filters'); filters.setAttribute('role', 'group');
 		filters.setAttribute('aria-label', this.t('appearanceThemeFilter')); gallery.filters = [];
 		for (const [filter, title] of [['all', 'appearanceThemeFilterAll'], ['light', 'appearanceThemeFilterLight'], ['dark', 'appearanceThemeFilterDark']]) {
 			const button = this.element('button', '', this.t(title)); button.type = 'button'; button.dataset.themeFilter = filter;
-			button.addEventListener('click', () => { gallery.filter = filter; gallery.page = 0; this.renderChoices(key); });
+			button.addEventListener('click', () => { gallery.filter = filter; gallery.page = 0; this.renderChoices(key); gallery.content.scrollTop = 0; });
 			filters.append(button); gallery.filters.push(button);
 		}
 		controls.append(filters); return controls;
@@ -167,12 +168,14 @@ export class AppearanceChoices {
 			gallery.page = Math.max(0, Math.min(gallery.page, pages - 1));
 			visible = gallery.expanded ? filtered.slice(gallery.page * 6, gallery.page * 6 + 6) : choices.filter(choice => choice.value === this.values[key]);
 			grid.dataset.expanded = String(gallery.expanded); gallery.toggle.setAttribute('aria-expanded', String(gallery.expanded));
+			gallery.content.dataset.expanded = String(gallery.expanded);
 			grid.dataset.empty = String(gallery.expanded && filtered.length === 0);
 			gallery.toggle.textContent = this.t(gallery.expanded ? 'appearanceThemeCollapse' : 'appearanceThemeChange');
-			gallery.controls.hidden = !gallery.expanded; gallery.pagination.hidden = !gallery.expanded || filtered.length === 0;
+			gallery.controls.hidden = !gallery.expanded; gallery.pagination.hidden = !gallery.expanded;
 			gallery.empty.hidden = !gallery.expanded || filtered.length > 0;
-			gallery.status.textContent = `${gallery.page + 1} / ${pages}`;
-			gallery.status.setAttribute('aria-label', this.t('appearanceThemePage').replace('{page}', gallery.page + 1).replace('{pages}', pages));
+			const pageNumber = filtered.length ? gallery.page + 1 : 0; const pageCount = filtered.length ? pages : 0;
+			gallery.status.textContent = `${pageNumber} / ${pageCount}`;
+			gallery.status.setAttribute('aria-label', this.t('appearanceThemePage').replace('{page}', pageNumber).replace('{pages}', pageCount));
 			gallery.previous.disabled = gallery.page === 0; gallery.next.disabled = gallery.page === pages - 1;
 			for (const button of gallery.filters) button.setAttribute('aria-pressed', String(button.dataset.themeFilter === gallery.filter));
 		}

@@ -64,8 +64,9 @@ test('layout changes reuse the current list and numeric preferences persist', as
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dark');
 });
 
-test('untrusted article markup has an opaque script-free frame and images are opt-in', async ({ page }) => {
-	await page.context().request.post('./?c=reader&a=preferences', { data: { _csrf: bootstrap.csrf, preferences: { remoteImages: false } } });
+test('articles display images automatically and saved privacy settings block external images', async ({ page }) => {
+	expect(bootstrap.schema.remoteImages.default).toBe(true);
+	await page.context().request.post('./?c=reader&a=preferences', { data: { _csrf: bootstrap.csrf, preferences: { remoteImages: true } } });
 	await page.reload();
 	let externalRequests = 0;
 	await page.context().route('https://example.invalid/**', route => { externalRequests++; return route.abort(); });
@@ -80,14 +81,34 @@ test('untrusted article markup has an opaque script-free frame and images are op
 	await page.locator('.entry-card').first().click();
 	const frame = page.frameLocator('#article-frame');
 	await expect(frame.getByText('Isolation fixture')).toBeVisible();
-	await expect(frame.locator('script,iframe,form,input,img')).toHaveCount(0);
-	expect(externalRequests).toBe(0);
+	await expect(frame.locator('script,iframe,form,input')).toHaveCount(0);
+	await expect(frame.locator('img')).toHaveCount(1);
+	await expect(frame.locator('img')).not.toHaveAttribute('onerror');
+	await expect(frame.getByText('unsafe', { exact: true })).not.toHaveAttribute('href');
+	await expect(frame.locator('.article-image-notice')).toHaveCount(0);
+	await expect(page.locator('#load-images')).toHaveCount(0);
+	await expect.poll(() => externalRequests).toBe(1);
 	expect(await page.locator('body').getAttribute('data-intruded')).toBeNull();
 	const contentFrame = await (await page.locator('#article-frame').elementHandle()).contentFrame();
 	expect(await contentFrame.evaluate(() => { try { return Boolean(globalThis.parent.document.body); } catch { return false; } })).toBe(false);
-	await page.locator('#load-images').click();
-	await expect(frame.locator('img')).toHaveCount(1);
-	await expect.poll(() => externalRequests).toBe(1);
+	await page.locator('#open-settings').click();
+	await selectSection(page, 'privacy');
+	await page.locator('[name=remoteImages]').uncheck();
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	await page.locator('#cancel-settings').click();
+	await expect(frame.locator('img')).toHaveCount(0);
+	await expect(frame.locator('.article-image-notice')).toBeVisible();
+	await expect(frame.locator('.article-image-notice')).toContainText(/privacy|隐私/i);
+	await expect(page.locator('#load-images')).toHaveCount(0);
+	expect(externalRequests).toBe(1);
+	await page.reload();
+	await page.locator('.entry-card').first().click();
+	await expect(frame.getByText('Isolation fixture')).toBeVisible();
+	await expect(frame.locator('img')).toHaveCount(0);
+	await expect(frame.locator('.article-image-notice')).toBeVisible();
+	await expect(page.locator('#load-images')).toHaveCount(0);
+	expect(externalRequests).toBe(1);
 });
 
 test('a pending article can be closed on mobile, and state writes do not rebuild its frame', async ({ page }) => {

@@ -215,6 +215,95 @@ test('theme browsing stays compact and pagination, filters and search never chan
 	expect(reader.writes).toHaveLength(0);
 });
 
+test('theme pagination keeps both button slots fixed across pages, filters and empty searches', async ({ page, reader }) => {
+	await openSettings(page);
+	const group = await expandThemeChoices(page);
+	const tiles = group.locator('label.appearance-choice:visible');
+	const search = group.locator('[data-theme-search=theme]');
+	const previous = group.locator('[data-theme-page=previous]');
+	const next = group.locator('[data-theme-page=next]');
+	const current = await selectedChoice(page, 'theme').inputValue();
+	await group.locator('[data-theme-filter=all]').click();
+	await search.fill('');
+	await expect(tiles).toHaveCount(6);
+	await expect(previous).toBeDisabled();
+	await expect(next).toBeEnabled();
+	// Settings scrolls on narrow screens; measure each button's real slot within its fieldset.
+	const geometry = () => group.evaluate(node => {
+		const origin = node.getBoundingClientRect();
+		return ['previous', 'next'].map(direction => {
+			const box = node.querySelector(`[data-theme-page="${direction}"]`).getBoundingClientRect();
+			return { x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height };
+		});
+	});
+	const firstPageGeometry = await geometry();
+	const expectFixedSlots = async label => {
+		await expect(previous, label).toBeVisible();
+		await expect(next, label).toBeVisible();
+		const boxes = await geometry();
+		for (const [index, box] of boxes.entries()) {
+			for (const key of ['x', 'y', 'width', 'height']) {
+				expect(box[key], `${label}: ${index === 0 ? 'previous' : 'next'} ${key}`).toBeCloseTo(firstPageGeometry[index][key], 0);
+			}
+		}
+		await expect(selectedChoice(page, 'theme')).toHaveValue(current);
+		await expect(page.locator('#save-reader-settings')).toBeDisabled();
+		expect(reader.writes).toHaveLength(0);
+	};
+	const advancePage = async () => {
+		await next.scrollIntoViewIfNeeded();
+		const before = await next.boundingBox();
+		const content = page.locator('.settings-content');
+		const scrollTop = await content.evaluate(node => node.scrollTop);
+		await next.click();
+		expect(await content.evaluate(node => node.scrollTop)).toBe(scrollTop);
+		const after = await next.boundingBox();
+		for (const key of ['x', 'y', 'width', 'height']) expect(after[key], `next page button ${key}`).toBeCloseTo(before[key], 0);
+	};
+	await expectFixedSlots('all themes, first page');
+	await advancePage();
+	await expect(tiles).toHaveCount(6);
+	await expect(previous).toBeEnabled();
+	await expect(next).toBeEnabled();
+	await expectFixedSlots('all themes, middle page');
+	for (let pageIndex = 0; pageIndex < 6 && await next.isEnabled(); pageIndex++) {
+		await advancePage();
+		await expectFixedSlots(`all themes, page ${pageIndex + 3}`);
+	}
+	await expect(tiles).toHaveCount(3);
+	await expect(previous).toBeEnabled();
+	await expect(next).toBeDisabled();
+	await expectFixedSlots('all themes, partial last page');
+	for (const mode of ['light', 'dark']) {
+		await group.locator(`[data-theme-filter="${mode}"]`).click();
+		await expect(previous).toBeDisabled();
+		await expectFixedSlots(`${mode} themes, first page`);
+		for (let pageIndex = 0; pageIndex < 6 && await next.isEnabled(); pageIndex++) {
+			await advancePage();
+			await expectFixedSlots(`${mode} themes, page ${pageIndex + 2}`);
+		}
+		await expect(next).toBeDisabled();
+		const filtered = await tiles.evaluateAll(nodes => nodes.map(node => node.dataset.choiceValue));
+		expect(filtered.length).toBeGreaterThan(0);
+		expect(filtered.length).toBeLessThanOrEqual(6);
+		for (const value of filtered) expect(themeSpec(value).dark).toBe(mode === 'dark');
+		await expectFixedSlots(`${mode} themes, last page`);
+	}
+	await group.locator('[data-theme-filter=all]').click();
+	await search.fill('dracula');
+	await expect(tiles).toHaveCount(1);
+	await expect(previous).toBeDisabled();
+	await expect(next).toBeDisabled();
+	await expectFixedSlots('single search result');
+	await search.fill('no-matching-theme');
+	await expect(tiles).toHaveCount(0);
+	await expect(group.locator('.theme-gallery-empty')).toBeVisible();
+	await expect(previous).toBeDisabled();
+	await expect(next).toBeDisabled();
+	await expectFixedSlots('empty search results');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+});
+
 test('appearance choice groups support native keyboard selection and explain layout differences visually', async ({ page, reader }) => {
 	await openSettings(page);
 	for (const [key, count] of [['theme', 33], ['layout', 3], ['density', 2], ['style', 3]]) {
