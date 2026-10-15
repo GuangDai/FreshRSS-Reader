@@ -139,6 +139,9 @@ class FreshRSS_View extends Minz_View {
 
 	/** @var array<string,mixed> */
 	public array $readerBootstrap = [];
+	public string $readerScriptNonce = '';
+	/** @var array{imports:array<string,string>} */
+	public array $readerModuleAssets = ['imports' => []];
 
 	// Extensions
 	/** @var list<ExtensionFullMetadata> */

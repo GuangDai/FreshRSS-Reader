@@ -2,8 +2,9 @@
 	declare(strict_types=1);
 	/** @var FreshRSS_View $this */
 ?>
-<main class="prompt">
-	<h1><?= _t('gen.auth.login') ?></h1>
+<main class="prompt account-prompt" aria-labelledby="account-heading">
+	<a class="account-brand" href="<?= _url('index', 'index') ?>">FreshRSS</a>
+	<h1 id="account-heading"><?= _t('gen.auth.login') ?></h1>
 
 	<?php if ((FreshRSS_Context::systemConf()->limits['max_registrations'] ?? 1) !== 1): ?>
 		<?php if (FreshRSS_user_Controller::max_registrations_reached()): ?>
@@ -31,8 +32,9 @@
 		<div class="form-group">
 			<label for="passwordPlain"><?= _t('gen.auth.password') ?></label>
 			<div class="stick">
-				<input type="password" id="passwordPlain" class="passwordPlain" required="required" />
-				<button type="button" class="btn toggle-password"><?= _i('key') ?></button>
+				<input type="password" id="passwordPlain" class="passwordPlain" required="required" autocomplete="current-password" />
+				<button type="button" class="btn toggle-password" aria-label="<?= _t('gen.auth.password.show') ?>"
+					aria-controls="passwordPlain" aria-pressed="false"><?= _i('key') ?></button>
 			</div>
 			<input type="hidden" id="challenge" name="challenge" />
 			<noscript><strong><?= _t('gen.js.should_be_activated') ?></strong></noscript>

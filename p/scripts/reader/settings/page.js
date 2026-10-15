@@ -3,7 +3,7 @@ import { AccountSettings } from './account.js';
 import { BackupSettings } from './backup.js';
 
 const sections = [
-	['appearance', '外观与排版', 'Appearance', '主题、布局和信息密度。更改会即时预览。', 'Themes, layout and density. Changes preview immediately.', 'settings'],
+	['appearance', '外观', 'Appearance', '选择主题、文章列表布局和显示方式，保存后生效。', 'Choose a theme, article layout and display style. Save to apply changes.', 'settings'],
 	['reading', '阅读与操作', 'Reading', '正文排版、阅读行为、导航和快捷键。', 'Article typography, reading behaviour, navigation and keyboard shortcuts.', 'list'],
 	[
 		'subscriptions', '订阅与分类', 'Subscriptions',
@@ -43,11 +43,9 @@ const sections = [
 // These destinations use the complete, existing FreshRSS forms and their authentication flow.
 const toolCatalog = {
 	appearance: [
-		['classic-display', '经典界面的外观', 'Classic appearance', '语言、时区、主题、文章信息和动作显示。', 'Language, time zone, themes and article information.', 'configure', 'display'],
+		['language-timezone', '语言与时区', 'Language and time zone', '设置界面语言与日期显示使用的时区。', 'Choose your interface language and time zone.', 'configure', 'display'],
 	],
-	reading: [
-		['shortcuts', '快捷键', 'Keyboard shortcuts', '自定义经典界面的按键，或恢复默认组合。', 'Customise classic-interface shortcuts or restore defaults.', 'configure', 'shortcut'],
-	],
+	reading: [],
 	subscriptions: [
 		[
 			'add-feed', '添加订阅', 'Add a subscription',
@@ -159,12 +157,25 @@ export function settingsSections(language = 'en') {
 }
 
 export class SettingsPage {
-	constructor({ root, api, store, bootstrap, element, t, onSection, onAccountSaved, onError }) {
-		Object.assign(this, { root, api, store, bootstrap, element, t, onSection, onError });
+	constructor({ root, api, store, bootstrap, element, t, onSection, onAccountSaved, onError, onDirty }) {
+		Object.assign(this, { root, api, store, bootstrap, element, t, onSection, onError, onDirty });
 		this.zh = bootstrap.language.toLowerCase().startsWith('zh');
 		this.sections = settingsSections(bootstrap.language);
 		this.section = 'appearance'; this.opened = false; this.storageEpoch = 0; this.toolDirty = false;
-		this.account = new AccountSettings({ root, api, bootstrap, element, t, onSaved: onAccountSaved, onError });
+		this.account = new AccountSettings({
+			root,
+			api,
+			bootstrap,
+			element,
+			t,
+			onSaved: onAccountSaved,
+			onError,
+			externalActions: true,
+			onDirty: (dirty, state) => {
+				this.accountState = state;
+				this.syncSavebar(); this.onDirty?.();
+			},
+		});
 		this.tools = new ConfigurationSettings({ root, api, bootstrap, store, element, t, onStatus: () => {} });
 		this.backups = new BackupSettings({ root, api, bootstrap, element, t, onError });
 		this.message = event => this.receiveMessage(event);
@@ -186,15 +197,6 @@ export class SettingsPage {
 			const panel = this.element('section', 'settings-section'); panel.dataset.settingsPanel = section.id; panel.hidden = true;
 			if (['appearance', 'reading', 'privacy', 'storage', 'automation', 'advanced'].includes(section.id)) {
 				const fields = this.element('div'); fields.dataset.readerPreferences = section.id; panel.append(fields);
-			}
-			if (section.id === 'appearance') {
-				const preview = this.element('div', 'appearance-preview');
-				const identity = this.element('div', 'preview-identity');
-				const name = this.element('strong', '', 'Sunset'); name.id = 'preview-theme-name';
-				const mode = this.element('small'); mode.id = 'preview-theme-mode'; identity.append(name, mode);
-				const swatches = this.element('div', 'preview-swatches'); swatches.setAttribute('aria-hidden', 'true');
-				for (let i = 0; i < 4; i++) swatches.append(this.element('span'));
-				preview.append(identity, swatches); panel.prepend(preview);
 			}
 			if (['reading', 'filters', 'storage', 'privacy', 'automation'].includes(section.id)) {
 				const account = this.element('div'); account.dataset.accountSettings = section.id; panel.append(account);
@@ -222,16 +224,21 @@ export class SettingsPage {
 				this.buildTransfer(panel);
 				const backups = this.element('div'); backups.dataset.backupSettings = 'true'; panel.append(backups);
 			}
+			if (section.id === 'privacy') {
+				const logout = this.element('form', 'settings-group');
+				logout.method = 'post'; logout.action = './?c=auth&a=logout';
+				const csrf = this.element('input'); csrf.type = 'hidden'; csrf.name = '_csrf'; csrf.value = this.bootstrap.csrf;
+				const button = this.element('button', '', this.text('退出登录', 'Sign out')); button.type = 'submit';
+				logout.append(csrf, button); panel.append(logout);
+			}
 			if (section.id === 'advanced') this.buildLimits(panel);
 			this.buildTools(section.id, panel);
 			panels.append(panel);
 		}
-		const preview = this.element('details', 'reading-preview'); preview.id = 'reading-preview';
-		preview.append(this.element('summary', '', this.t('readingPreview')));
-		const paper = this.element('div', 'settings-preview');
-		paper.append(this.element('strong', '', this.t('previewTitle')), this.element('p', '', this.t('previewText')));
-		preview.append(paper);
-		this.root.querySelector('[data-reader-preferences="reading"]').append(preview);
+		const shortcuts = this.element('section', 'settings-group settings-shortcuts');
+		shortcuts.append(this.element('h3', '', this.text('键盘快捷键', 'Keyboard shortcuts')),
+			this.element('p', 'settings-note', this.t('keyboard')));
+		this.root.querySelector('[data-settings-panel="reading"]').append(shortcuts);
 		navigation.addEventListener('click', event => {
 			const button = event.target.closest('[data-settings-section]'); if (button) this.onSection(button.dataset.settingsSection);
 		});
@@ -311,10 +318,10 @@ export class SettingsPage {
 	buildTransfer(panel) {
 		const transfer = this.element('section', 'settings-group settings-transfer');
 		transfer.append(
-			this.element('h3', '', this.text('阅读器配置', 'Reader preferences')),
+			this.element('h3', '', this.text('外观与阅读设置', 'Appearance and reading settings')),
 			this.element('p', 'settings-note', this.text(
-				'保存主题、排版和缓存设置。导入会先作为草稿预览，保存后生效。',
-				'Export themes, typography and cache preferences. Imports are previewed as drafts before saving.')));
+				'导出主题、排版和缓存设置。导入后可检查和修改，点击保存后生效。',
+				'Export themes, typography and cache preferences. Review imported settings, then save to apply them.')));
 		const tools = this.element('div', 'settings-tools');
 		for (const [id, key] of [['export-settings', 'export'], ['import-settings', 'import'], ['reset-settings', 'reset']]) {
 			const button = this.element('button', '', this.t(key)); button.type = 'button'; button.id = id; tools.append(button);
@@ -339,7 +346,6 @@ export class SettingsPage {
 		save.hidden = true;
 		limits.append(save);
 		panel.append(limits);
-		const classic = this.element('a', 'settings-classic-link', this.t('classic')); classic.href = './'; panel.append(classic);
 	}
 
 	buildTools(section, panel) {
@@ -388,10 +394,36 @@ export class SettingsPage {
 
 	syncSavebar(dirty = this.readerDirty) {
 		this.readerDirty = Boolean(dirty);
-		this.node('settings-savebar').hidden = !this.readerDirty && this.node('settings-status').hidden;
-		this.node('save-reader-settings').hidden = !this.readerDirty;
-		this.node('discard-settings').hidden = !this.readerDirty;
+		const pending = this.readerDirty || this.hasNativeDraft();
+		const editable = ['appearance', 'reading', 'privacy', 'storage', 'automation', 'advanced'].includes(this.section) || this.account.sections.has(this.section);
+		this.node('settings-savebar').hidden = !editable && !pending && this.node('settings-status').hidden;
+		this.node('save-reader-settings').hidden = false;
+		this.node('discard-settings').hidden = false;
+		this.node('discard-settings').disabled = !pending || Boolean(this.accountState?.busy);
+		this.node('settings-save-state').textContent = this.t(pending ? 'unsavedSettings' : 'settingsUpToDate');
+		const trigger = this.root.ownerDocument.getElementById('open-settings');
+		if (trigger) {
+			trigger.dataset.unsaved = String(pending);
+			trigger.setAttribute('aria-label', this.t(pending ? 'settingsWithChanges' : 'settings'));
+		}
 	}
+
+	hasNativeDraft() { return this.account.hasDraft(); }
+	async saveSettings() {
+		const saved = await this.account.saveAll();
+		if (!saved) {
+			const invalid = this.root.querySelector('[data-account-field] [aria-invalid="true"]');
+			const section = invalid?.closest('[data-settings-panel]')?.dataset.settingsPanel;
+			if (section) {
+				this.onSection(section);
+				for (let parent = invalid.closest('details'); parent; parent = parent.parentElement?.closest('details')) parent.open = true;
+				invalid.focus();
+			}
+		}
+		return saved;
+	}
+
+	resetSettings() { this.account.resetAll(); }
 
 	open() {
 		this.opened = true;
@@ -404,7 +436,7 @@ export class SettingsPage {
 	syncDocument() {
 		const document = this.root.ownerDocument; if (!document) return;
 		const selected = this.sections.find(section => section.id === this.section);
-		document.title = this.opened ? `${selected.title} · ${this.t('settings')} · FreshRSS` : 'FreshRSS · Reader';
+		document.title = this.opened ? `${selected.title} · ${this.t('settings')} · FreshRSS` : 'FreshRSS';
 		const skip = document.querySelector('.skip-link'); if (!skip) return;
 		skip.href = this.opened ? '#settings-section-heading' : '#article-list';
 		skip.textContent = this.opened ? this.text('跳到设置内容', 'Skip to settings content') : this.t('skipToArticles');

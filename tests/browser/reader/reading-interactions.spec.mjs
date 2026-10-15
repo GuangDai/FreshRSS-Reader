@@ -31,11 +31,25 @@ async function readingAutomation(page, reader, readerServer, flags) {
 	const bootstrap = { ...reader.bootstrap, preferences: reader.preferences, ...flags };
 	const body = readerServer.html.replace(/(<script[^>]+id="reader-bootstrap"[^>]*>)[\s\S]*?(<\/script>)/,
 		(_, start, end) => start + JSON.stringify(bootstrap).replaceAll('<', '\\u003c') + end);
-	await page.route(url => url.searchParams.get('c') === 'reader' && !url.searchParams.has('a'),
+	await page.route(url => url.pathname === '/i/' && [null, 'index', 'reader'].includes(url.searchParams.get('c')) && !url.searchParams.has('a'),
 		route => route.fulfill({ body, contentType: 'text/html; charset=utf-8' }));
 	await page.reload();
 	await expect(page.locator('.entry-card')).toHaveCount(4);
 }
+
+test('public reading shows sign in and hides controls that require an account', async ({ page, reader, readerServer }) => {
+	await readingAutomation(page, reader, readerServer, { readOnly: true, autoMarkArticle: false, autoMarkSite: false });
+	await expect(page.locator('#sign-in')).toBeVisible();
+	for (const id of ['open-settings', 'quick-layout', 'mark-page-read']) await expect(page.locator('#' + id)).toBeHidden();
+	await expect(page.locator('[data-open-settings]')).toBeHidden();
+	await page.locator('.entry-card').first().click();
+	await expect(page.locator('#article-frame')).toBeVisible();
+	await expect(page.locator('#mark-read')).toBeHidden();
+	await expect(page.locator('#mark-star')).toBeHidden();
+	await page.locator('#close-article').focus();
+	await page.keyboard.press('m'); await page.keyboard.press('s');
+	expect(reader.writes).toEqual([]);
+});
 
 test('reading starts below one toolbar and titles lead a single metadata row', async ({ page, reader }, testInfo) => {
 	await expect(page.locator('.brand-caption, .toolbar .eyebrow, .list-toolbar')).toHaveCount(0);
@@ -403,7 +417,7 @@ test('original articles open directly and image controls only appear for blocked
 	expect(reader.writes).toHaveLength(0);
 });
 
-test('unchanged settings need no save and reverting a preview disables saving again', async ({ page, reader }) => {
+test('unchanged settings need no save and reverting a draft disables saving again', async ({ page, reader }) => {
 	await openSettings(page);
 	const save = page.locator('#save-reader-settings');
 	await expect(save).toBeDisabled();
@@ -414,7 +428,7 @@ test('unchanged settings need no save and reverting a preview disables saving ag
 	const changedTheme = originalTheme === 'dark' ? 'nord' : 'dark';
 	await page.locator('[name=theme]').selectOption(changedTheme);
 	await expect(save).toBeEnabled();
-	await expect(page.locator('body')).toHaveAttribute('data-theme', changedTheme);
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
 	await page.locator('[name=theme]').selectOption(originalTheme);
 	await expect(save).toBeDisabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);

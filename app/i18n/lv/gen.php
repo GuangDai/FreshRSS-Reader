@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Atjaunināt barotnes',
 		'add' => 'Pievienot',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Atgriezieties pie RSS barotnēm',
 		'cancel' => 'Atcelt',
 		'close' => 'Close',	// TODO
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Noņemt',
 		'rename' => 'Pārdēvēt',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Skatīt mājaslapu',
 		'submit' => 'Iesniegt',
 		'truncate' => 'Izdzēst visus rakstus',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Parole',
 			'format' => '<small>Vismaz 7 rakstzīmes</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// TODO

@@ -402,3 +402,77 @@ test('a retained form iframe finishing its load cannot add another Back during t
 	assert.equal(navigation.pending, null);
 	assert.equal(navigation.panel, null);
 });
+
+for (const path of ['/i/', '/i/?c=index', '/i/?c=reader', '/i/?c=index&a=global', '/i/?c=index&a=normal', '/i/?c=index&a=reader']) {
+	test(`the unified reading page keeps a canonical home URL from ${path}`, () => {
+		const { navigation, history, location } = fixture('https://reader.test' + path);
+		navigation.start(initial());
+		assert.equal(location.href, 'https://reader.test/i/');
+		navigation.openArticle('100', initial());
+		const url = new URL(location.href);
+		assert.equal(url.pathname, '/i/');
+		assert.equal(url.searchParams.get('c'), null);
+		assert.equal(url.searchParams.get('a'), null);
+		assert.equal(url.searchParams.get('article'), '100');
+		assert.equal(history.length, 2);
+	});
+}
+
+test('legacy compound reading states survive shared links, reload and history', () => {
+	const f = fixture('https://reader.test/i/?c=index&a=normal&get=t_42&state=96&search=RSS');
+	const state = f.navigation.start(initial());
+	assert.deepEqual(state.query, { get: 't_42', filter: 'all', search: 'RSS', state: 96 });
+	assert.equal(new URL(f.location.href).searchParams.get('state'), '96');
+	f.navigation.openArticle('100', state);
+	f.flush(-1);
+	assert.equal(f.restored.at(-1).state.query.state, 96);
+	const reload = new ReaderNavigation({ history: f.history, location: f.location, onRestore() {} });
+	assert.equal(reload.start(initial()).query.state, 96);
+	f.navigation.replace({ ...state, query: { get: 't_42', filter: 'unread', search: 'RSS' } });
+	assert.equal(new URL(f.location.href).searchParams.has('state'), false);
+	assert.equal(new URL(f.location.href).searchParams.get('filter'), 'unread');
+});
+
+test('a supported filter overrides an inherited legacy state on a shared URL', () => {
+	const { navigation } = fixture('https://reader.test/i/?filter=unread&state=96');
+	const state = navigation.start({ ...initial(), query: { ...initial().query, state: 96 } });
+	assert.deepEqual(state.query, { get: 'a', filter: 'unread', search: '' });
+});
+
+for (const [state, filter] of [[2, 'unread'], [3, 'all'], [4, 'starred']]) {
+	test(`legacy state ${state} uses the visible ${filter} filter`, () => {
+		const f = fixture('https://reader.test/i/?state=' + state);
+		assert.deepEqual(f.navigation.start(initial()).query, { get: 'a', filter, search: '' });
+		assert.equal(new URL(f.location.href).searchParams.has('state'), false);
+	});
+}
+
+test('arbitrary and overflowing states are not retained in navigation or outgoing URLs', () => {
+	for (const state of [16, -1, 0, 112, 4294967297, '1', true]) {
+		const f = fixture();
+		assert.equal(f.navigation.start({ ...initial(), query: { ...initial().query, state } }).query.state, undefined);
+		assert.equal(new URL(f.location.href).searchParams.has('state'), false);
+	}
+});
+
+test('choosing all overrides the account default in a reloadable and shareable URL', () => {
+	for (const query of [{ get: 'a', filter: 'unread', search: '' }, { get: 'a', filter: 'all', search: '', state: 96 }]) {
+		const f = fixture('https://reader.test/i/');
+		f.navigation.start({ ...initial(), query });
+		f.navigation.replace(initial());
+		assert.equal(new URL(f.location.href).searchParams.get('filter'), 'all');
+		assert.equal(new URL(f.location.href).searchParams.has('state'), false);
+		const shared = fixture(f.location.href);
+		assert.equal(shared.navigation.start({ ...initial(), query }).query.filter, 'all');
+		assert.equal(shared.navigation.current.snapshot.query.state, undefined);
+		assert.equal(new URL(shared.location.href).searchParams.get('filter'), 'all');
+	}
+});
+
+test('compound reading state URLs remain unambiguous after sharing without browser history', () => {
+	const f = fixture('https://reader.test/i/?state=96');
+	f.navigation.start({ ...initial(), query: { ...initial().query, state: 96 } });
+	assert.equal(new URL(f.location.href).searchParams.has('filter'), false);
+	const shared = fixture(f.location.href);
+	assert.equal(shared.navigation.start(initial()).query.state, 96);
+});

@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => '更新订阅源',
 		'add' => '添加',
+		'back_to_reading' => '返回阅读',
 		'back_to_rss_feeds' => '← 返回订阅源',
 		'cancel' => '取消',
 		'close' => '关闭',
@@ -48,6 +49,7 @@ return array(
 		'remove' => '删除',
 		'rename' => '重命名',
 		'retry' => '重试',
+		'save_changes' => '保存更改',
 		'see_website' => '网站中查看',
 		'submit' => '提交',
 		'truncate' => '删除所有文章',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => '密码',
 			'format' => '<small>至少 7 个字符</small>',
+			'show' => '显示密码',
 		),
 		'reauth' => array(
 			'header' => '需要重新认证',

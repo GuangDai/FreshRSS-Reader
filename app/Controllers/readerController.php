@@ -13,6 +13,7 @@ use FreshRSS\Services\Reader\ApiResponse;
 use FreshRSS\Services\Reader\BackupPolicyService;
 use FreshRSS\Services\Reader\EntryPresenter;
 use FreshRSS\Services\Reader\EntryStateService;
+use FreshRSS\Services\Reader\ModuleAssets;
 use FreshRSS\Services\Reader\Preferences;
 use FreshRSS\Services\Reader\SchedulerSettingsService;
 use FreshRSS\Services\Reader\SettingsService;
@@ -22,12 +23,32 @@ use FreshRSS\Services\Subscriptions\ConfigurationService as SubscriptionConfigur
 use FreshRSS\Services\Subscriptions\NameValidator;
 use FreshRSS\Utils\Http\ApiInput;
 
-/** Same-origin JSON boundary for the optional reader frontend; no API password is exposed to JavaScript. */
+/** Home reading interface and same-origin JSON API; no API password is exposed to JavaScript. */
 final class FreshRSS_reader_Controller extends FreshRSS_ActionController {
+	private bool $readOnly = false;
+
 	#[\Override]
 	public function firstAction(): void {
-		if (!FreshRSS_Auth::hasAccess()) {
-			self::respond(['error' => 'authentication_required'], 403);
+		$this->readOnly = !FreshRSS_Auth::hasAccess();
+		if ($this->readOnly) {
+			$publicRead = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+				&& in_array(Minz_Request::actionName(), ApiContract::PUBLIC_READ_ACTIONS, true)
+				&& FreshRSS_Auth::allowAnonymous() && FreshRSS_Context::hasUserConf() && FreshRSS_Context::userConf()->enabled;
+			if (!$publicRead) {
+				if (Minz_Request::actionName() === 'index') {
+					if (Minz_Request::paramString('user') !== '' || FreshRSS_Auth::allowAnonymous()) {
+						Minz_Error::error(403, redirect: false);
+					} else {
+						Minz_Request::forward(['c' => 'auth', 'a' => 'login']);
+					}
+					return;
+				}
+				self::respond(['error' => 'authentication_required'], 403);
+			}
+			if (Minz_Request::actionName() === 'index' && Minz_Request::paramString('view') === 'settings') {
+				Minz_Request::forward(['c' => 'auth', 'a' => 'login']);
+				return;
+			}
 		}
 		$this->view->_layout(null);
 		header('Cache-Control: private, no-store');
@@ -64,21 +85,44 @@ final class FreshRSS_reader_Controller extends FreshRSS_ActionController {
 
 	public function indexAction(): void {
 		header('Content-Type: text/html; charset=UTF-8');
+		$this->view->readerScriptNonce = bin2hex(random_bytes(16));
+		$this->view->readerModuleAssets = ModuleAssets::importMap();
 		$this->_csp([
-			'default-src' => "'self'", 'script-src' => "'self'", 'style-src' => "'self' 'unsafe-inline'",
+			'default-src' => "'self'", 'script-src' => "'self' 'nonce-" . $this->view->readerScriptNonce . "'",
+			'style-src' => "'self' 'unsafe-inline'",
 			'img-src' => "'self' https: http: data:", 'media-src' => "'none'", 'connect-src' => "'self'",
 			'frame-src' => "'self'", 'frame-ancestors' => "'none'", 'object-src' => "'none'", 'base-uri' => "'none'",
 		]);
+		try {
+			FreshRSS_Context::updateUsingRequest(true);
+		} catch (FreshRSS_Context_Exception) {
+			Minz_Error::error(404);
+			return;
+		}
+		$initialQuery = [
+			'get' => Minz_Request::paramString('get', plaintext: true) ?: 'a',
+			'filter' => Minz_Request::paramString('filter', plaintext: true),
+			'search' => Minz_Request::paramString('search', plaintext: true),
+		];
+		if ($initialQuery['filter'] === '') {
+			$filter = array_search(FreshRSS_Context::$state, ApiContract::FILTERS, true);
+			$initialQuery['filter'] = $filter === false ? 'all' : $filter;
+			if ($filter === false) {
+				$initialQuery['state'] = FreshRSS_Context::$state;
+			}
+		}
 		$schema = Preferences::schema(FreshRSS_Context::systemConf()->reader);
 		$this->view->readerBootstrap = [
-			'csrf' => FreshRSS_Auth::csrfToken(),
+			'initialQuery' => $initialQuery,
+			'readOnly' => $this->readOnly,
+			'csrf' => $this->readOnly ? '' : FreshRSS_Auth::csrfToken(),
 			'apiLimits' => ApiInput::limits(),
 			'subscription' => SubscriptionConfigurationService::schema(ApiInput::limits()['maxBatchItems']),
 			'language' => FreshRSS_Context::userConf()->language,
 			'username' => Minz_User::name(),
 			'canManageLimits' => FreshRSS_Auth::hasAccess('admin'),
-			'autoMarkArticle' => (bool)(FreshRSS_Context::userConf()->mark_when['article'] ?? false),
-			'autoMarkSite' => (bool)(FreshRSS_Context::userConf()->mark_when['site'] ?? false),
+			'autoMarkArticle' => !$this->readOnly && (bool)(FreshRSS_Context::userConf()->mark_when['article'] ?? false),
+			'autoMarkSite' => !$this->readOnly && (bool)(FreshRSS_Context::userConf()->mark_when['site'] ?? false),
 			'adjustments' => Preferences::preferenceErrors(FreshRSS_Context::userConf()->reader_preferences, $schema),
 			'preferences' => Preferences::preferences(FreshRSS_Context::userConf()->reader_preferences, $schema),
 			'schema' => $schema,
@@ -168,6 +212,11 @@ final class FreshRSS_reader_Controller extends FreshRSS_ActionController {
 	}
 
 	public function capabilitiesAction(): void {
+		if ($this->readOnly) {
+			self::respond(['api' => 'freshrss-reader', 'authentication' => 'anonymous', 'readOnly' => true,
+				'limits' => ApiInput::limits(), 'pagination' => ['kind' => 'id_cursor', 'order' => 'descending', 'snapshot' => false],
+				'capabilities' => array_values(array_diff(ApiContract::PUBLIC_READ_ACTIONS, ['index'])), 'features' => ['search' => true]]);
+		}
 		self::respond(['api' => 'freshrss-reader', 'authentication' => 'session', 'csrf' => 'required_for_post',
 			'limits' => ApiInput::limits(), 'pagination' => ['kind' => 'id_cursor', 'order' => 'descending', 'snapshot' => false],
 			'capabilities' => array_values(array_diff(array_keys(ApiContract::routes()), ['index'])),
@@ -177,6 +226,11 @@ final class FreshRSS_reader_Controller extends FreshRSS_ActionController {
 	}
 
 	public function schemaAction(): void {
+		if ($this->readOnly) {
+			self::respond(['readOnly' => true, 'limits' => ApiInput::limits(),
+				'entryId' => ApiContract::entryIdSchema() + ['maximum' => EntryPresenter::ENTRY_ID_MAX],
+				'contract' => ApiContract::contract(FreshRSS_Context::systemConf()->reader, ApiInput::limits(), readOnly: true)]);
+		}
 		self::respond(['preferences' => Preferences::schema(FreshRSS_Context::systemConf()->reader),
 			'limits' => ApiInput::limits(), 'entryId' => ApiContract::entryIdSchema()
 				+ ['maximum' => EntryPresenter::ENTRY_ID_MAX],

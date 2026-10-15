@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Aktualizovat kanály',
 		'add' => 'Přidat',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Jít zpět na vaše kanály RSS',
 		'cancel' => 'Zrušit',
 		'close' => 'Close',	// TODO
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Odebrat',
 		'rename' => 'Přejmenovat',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Zobrazit webovou stránku',
 		'submit' => 'Odeslat',
 		'truncate' => 'Odstranit všechny články',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Heslo',
 			'format' => '<small>Alespoň 7 znaků</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// TODO

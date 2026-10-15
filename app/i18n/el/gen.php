@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Ενημέρωση πηγών',
 		'add' => 'Προσθήκη',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Επιστροφή στις πηγές',
 		'cancel' => 'Ακύρωση',
 		'close' => 'Κλείσιμο',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Αφαίρεση',
 		'rename' => 'Μετονομασία',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Προβολή ιστοσελίδας',
 		'submit' => 'Καταχώρηση',
 		'truncate' => 'Διαγραφή όλων των άρθρων',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Κωδικός',
 			'format' => '<small>Τουλάχιστον 7 χαρακτήρες</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Απαιτείται επανασύνδεση',

@@ -1,11 +1,21 @@
-html.reader-settings-embedded {
-	--width-aside: 0px;
-	background: var(--reader-settings-surface, var(--background-color-light, #fff));
+/* The same native controls are used in embedded tools and standalone management pages. */
+:is(.reader-settings-embedded, .reader-management-page) {
+	--reader-settings-surface: #fff;
+	--reader-settings-subtle: #f5f7fa;
+	--reader-settings-text: #20242b;
+	--reader-settings-muted: #606a78;
+	--reader-settings-line: #dce1e7;
+	--reader-settings-accent: #315a8b;
+	--reader-settings-primary: var(--reader-settings-accent);
+	--reader-settings-on-accent: #fff;
+	--reader-settings-error: #b33a36;
+	background: var(--reader-settings-surface);
 	height: auto;
-	scroll-padding-block-end: 4rem;
-}
-
-html.reader-settings-embedded[style*="--reader-settings-surface"] {
+	color: var(--reader-settings-text);
+	font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans CJK SC", sans-serif;
+	font-size: 15px;
+	color-scheme: light;
+	scroll-padding-block: 24px 96px;
 	--background-color-light: var(--reader-settings-surface);
 	--background-color-light-gradient1: var(--reader-settings-surface);
 	--background-color-light-gradient2: var(--reader-settings-surface);
@@ -68,174 +78,237 @@ html.reader-settings-embedded[style*="--reader-settings-surface"] {
 	--frss-box-shadow-color-transparent: transparent;
 }
 
-.reader-settings-embedded body {
-	margin: 0;
-	padding: 0;
+html.reader-settings-embedded {
+	--width-aside: 0px;
 	background: var(--reader-settings-surface, var(--background-color-light, #fff));
 	height: auto;
-	color: var(--reader-settings-text, var(--font-color, #202124));
-	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-	font-size: 14px;
-	line-height: 1.55;
-	min-height: 0;
+	scroll-padding-block-end: 4rem;
 }
 
-.reader-settings-embedded :is(.header, .aside, .close-aside, .nav_mobile, #nav_menu, .nav_menu) {
-	display: none;
-}
+:is(.reader-settings-embedded, .reader-management-page) * { box-sizing: border-box; }
 
-.reader-settings-embedded #global {
+:is(.reader-settings-embedded, .reader-management-page) body {
 	margin: 0;
 	padding: 0;
-	display: block;
-	width: 100%;
+	background: var(--reader-settings-surface);
 	height: auto;
-	position: static;
-	min-height: 0;
+	color: var(--reader-settings-text);
+	font: inherit;
+	line-height: 1.6;
+	min-height: 100dvh;
 }
 
-.reader-settings-embedded .post {
+:is(.reader-settings-embedded, .reader-management-page) :where(a, button.as-link) { color: var(--reader-settings-accent); }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(a, button.as-link):hover { text-decoration: underline; }
+
+:is(.reader-settings-embedded, .reader-management-page) .post {
 	margin: 0;
-	padding: var(--reader-settings-padding, 16px);
+	padding: 0;
 	background: transparent;
 	float: none;
 	max-width: none;
 	width: auto;
+	color: var(--reader-settings-text);
+	font-size: 1rem;
 	border: 0;
 	box-shadow: none;
 	position: static;
 	min-width: 0;
 }
 
-.reader-settings-embedded .post > h1 {
-	display: none;
-}
+:is(.reader-settings-embedded, .reader-management-page) .post > h1 { margin-block: 0 28px; color: var(--reader-settings-text); font-size: 1.6rem; font-weight: 650; line-height: 1.35; letter-spacing: -.035em; }
 
-.reader-settings-embedded :is(form, fieldset, .group-controls, .box-content) {
-	min-width: 0;
-}
+:is(.reader-settings-embedded, .reader-management-page) :is(form, fieldset, .form-group, .group-controls, .box-content, .alert) { max-width: 100%; min-width: 0; }
 
-.reader-settings-embedded :is(form, fieldset, .form-group, .alert) {
-	max-width: 100%;
-	min-width: 0;
-	box-sizing: border-box;
-}
+:is(.reader-settings-embedded, .reader-management-page) .post form { margin-block: 0 24px; }
 
-.reader-settings-embedded .alert {
-	width: auto;
-}
+:is(.reader-settings-embedded, .reader-management-page) :is(fieldset, .box-content) { margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none; }
 
-.reader-settings-embedded :is(.post > form, .post > fieldset) {
-	max-width: none;
-}
+:is(.reader-settings-embedded, .reader-management-page) :is(h2, h3, legend) { margin-block: 28px 8px; padding: 0; color: var(--reader-settings-text); font-size: 1.1333rem; font-weight: 650; line-height: 1.5; text-wrap: balance; }
 
-.reader-settings-embedded .form-group {
+:is(.reader-settings-embedded, .reader-management-page) .form-group {
 	margin: 0;
-	padding-block: 8px;
+	padding-block: 14px;
 	display: grid;
-	grid-template-columns: minmax(10rem, 30%) minmax(0, 1fr);
-	gap: 8px 24px;
+	border-bottom: 1px solid var(--reader-settings-line);
+	grid-template-columns: minmax(9rem, 30%) minmax(0, 1fr);
+	gap: 8px 28px;
 	align-items: start;
 }
 
-.reader-settings-embedded .form-group > :is(.group-name, .group-controls) {
-	margin: 0;
-	padding: 0;
-	float: none;
-	max-width: 100%;
-	width: auto;
-	text-align: start;
-	overflow-wrap: anywhere;
-}
+:is(.reader-settings-embedded, .reader-management-page) .form-group::after { display: none; }
 
-.reader-settings-embedded .form-group > .group-name {
-	font-weight: 600;
-}
+:is(.reader-settings-embedded, .reader-management-page) .form-group > :is(.group-name, .group-controls) { margin: 0; padding: 0; float: none; max-width: 100%; width: auto; text-align: start; min-height: 0; overflow-wrap: anywhere; }
 
-.reader-settings-embedded .form-group > .group-controls:only-child,
-.reader-settings-embedded .form-group > .group-controls:first-child {
-	grid-column: 1 / -1;
-}
+:is(.reader-settings-embedded, .reader-management-page) .form-group > .group-name { padding-block: 10px; font-weight: 500; line-height: 1.6; }
 
-.reader-settings-embedded :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea) {
-	max-width: 100%;
-	min-height: 36px;
-	box-sizing: border-box;
-}
+:is(.reader-settings-embedded, .reader-management-page) .form-group > .group-controls:only-child,
+:is(.reader-settings-embedded, .reader-management-page) .form-group > .group-controls:first-child { grid-column: 1 / -1; }
 
-.reader-settings-embedded :is(input, select, textarea, button, .btn) {
-	font: inherit;
-}
+:is(.reader-settings-embedded, .reader-management-page) :is(input, select, textarea, button, .btn) { font: inherit; }
 
-.reader-settings-embedded[style*="--reader-settings-surface"] :is(input, select, textarea) {
-	color: var(--reader-settings-text);
-}
-
-.reader-settings-embedded[style*="--reader-settings-surface"] input:is([type="checkbox"], [type="radio"], [type="range"]) {
-	accent-color: var(--reader-settings-primary, var(--reader-settings-accent));
-}
-
-.reader-settings-embedded[style*="--reader-settings-surface"] .btn-attention {
-	background: var(--reader-settings-surface);
-	color: var(--reader-settings-error, var(--reader-settings-accent));
-	border-color: currentcolor;
-	text-shadow: none;
-}
-
-.reader-settings-embedded[style*="--reader-settings-surface"] .btn-attention:hover {
-	background: var(--alert-error-background-color);
-}
-
-.reader-settings-embedded .group-controls > :is(input, select, textarea) {
+:is(.reader-settings-embedded, .reader-management-page) :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"]), select, textarea) {
 	margin-block: 0;
-}
-
-.reader-settings-embedded .form-group.form-actions {
-	margin-block-start: 12px;
-	padding-block: 12px;
-	background: var(--reader-settings-surface, var(--background-color-light, #fff));
-	border-top: 1px solid var(--reader-settings-line, var(--border-color, #ddd));
-	box-shadow: none;
-	position: static;
-}
-
-.reader-settings-embedded .form-actions .group-controls {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	align-items: center;
-}
-
-.reader-settings-embedded :is(.help, .alert, .group-controls p) {
-	max-width: 72ch;
-	overflow-wrap: anywhere;
-}
-
-.reader-settings-embedded :is(h2, h3, legend) {
-	text-wrap: balance;
-}
-
-.reader-settings-embedded :is(.table-wrapper, .rule-builder, .extraction-builder) {
+	padding: 10px 12px;
+	background: var(--reader-settings-surface);
 	max-width: 100%;
-	overflow-x: auto;
+	color: var(--reader-settings-text);
+	border: 1px solid color-mix(in srgb, var(--reader-settings-text) 50%, var(--reader-settings-surface));
+	border-radius: 6px;
+	box-shadow: none;
+	min-height: 44px;
+	min-width: 0;
 }
 
-.reader-settings-embedded :is(input, select, textarea, button, a):focus-visible {
-	outline: 2px solid var(--reader-settings-accent, var(--font-color-link, #276348));
-	outline-offset: 3px;
+:is(.reader-settings-embedded, .reader-management-page) .group-controls > :is(select, textarea, input[type="text"], input[type="url"], input[type="email"], input[type="password"], input[type="search"]) { width: 100%; }
+
+:is(.reader-settings-embedded, .reader-management-page) textarea { resize: vertical; line-height: 1.6; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(input, select, textarea):disabled { background: var(--reader-settings-subtle); color: var(--reader-settings-muted); font-style: normal; opacity: .65; }
+
+:is(.reader-settings-embedded, .reader-management-page) input:is([type="checkbox"], [type="radio"], [type="range"]) { accent-color: var(--reader-settings-primary); }
+
+:is(.reader-settings-embedded, .reader-management-page) input:is([type="checkbox"], [type="radio"]) { margin: 0; vertical-align: middle; flex-shrink: 0; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(.checkbox, .group-controls > label:has(> input[type="checkbox"])) { margin: 0; padding-block: 10px; display: flex; min-height: 44px; align-items: center; gap: 10px; line-height: 1.6; }
+
+:is(.reader-settings-embedded, .reader-management-page) :where(.btn, button:not(.as-link)) {
+	margin: 0;
+	padding: 10px 16px;
+	background: var(--reader-settings-surface);
+	display: inline-flex;
+	max-width: 100%;
+	color: var(--reader-settings-text);
+	border: 1px solid var(--reader-settings-line);
+	border-radius: 6px;
+	box-shadow: none;
+	min-height: 44px;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	line-height: 1.4;
+	text-decoration: none;
+	text-shadow: none;
+	cursor: pointer;
+	transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+:is(.reader-settings-embedded, .reader-management-page) :where(.btn, button:not(.as-link)):hover { background: var(--reader-settings-subtle); border-color: var(--reader-settings-muted); text-decoration: none; }
+
+:is(.reader-settings-embedded, .reader-management-page) .btn-important { background: var(--reader-settings-primary); color: var(--reader-settings-on-accent); border-color: var(--reader-settings-primary); font-weight: 600; }
+
+:is(.reader-settings-embedded, .reader-management-page) .btn-important:hover { background: color-mix(in srgb, var(--reader-settings-primary) 90%, var(--reader-settings-text)); color: var(--reader-settings-on-accent); border-color: transparent; }
+
+:is(.reader-settings-embedded, .reader-management-page) .btn-attention { background: transparent; color: var(--reader-settings-error); border-color: currentcolor; }
+
+:is(.reader-settings-embedded, .reader-management-page) .btn-attention:hover { background: var(--alert-error-background-color); border-color: var(--reader-settings-error); }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(button, .btn):disabled { opacity: .55; cursor: default; }
+
+:is(.reader-settings-embedded, .reader-management-page) .form-group.form-actions { margin-block-start: 24px; padding-block: 20px; background: var(--reader-settings-surface); border-top: 1px solid var(--reader-settings-line); border-bottom: 0; box-shadow: none; position: static; }
+
+:is(.reader-settings-embedded, .reader-management-page) .form-actions .group-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+:is(.reader-settings-embedded, .reader-management-page) .stick { display: inline-flex; max-width: 100%; align-items: stretch; }
+
+:is(.reader-settings-embedded, .reader-management-page) .stick > input { min-width: 0; flex: 1; }
+
+:is(.reader-settings-embedded, .reader-management-page) .stick > .btn { min-width: 44px; flex-shrink: 0; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(.help, .group-controls small) { margin-block: 8px 0; color: var(--reader-settings-muted); font-size: .8667rem; line-height: 1.65; }
+
+:is(.reader-settings-embedded, .reader-management-page) .help { display: block; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(.help, .alert, .group-controls p) { max-width: 72ch; overflow-wrap: anywhere; }
+
+:is(.reader-settings-embedded, .reader-management-page) .alert { margin-block: 16px; padding: 12px 16px; width: auto; border-radius: 6px; box-shadow: none; line-height: 1.65; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(.table-wrapper, .rule-builder, .extraction-builder) { max-width: 100%; overflow-x: auto; }
+
+:is(.reader-settings-embedded, .reader-management-page) table { width: 100%; border-collapse: collapse; font-size: .9333rem; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(th, td) { padding: 12px; border-bottom: 1px solid var(--reader-settings-line); text-align: start; }
+
+:is(.reader-settings-embedded, .reader-management-page) th { background: var(--reader-settings-subtle); color: var(--reader-settings-muted); font-size: .8667rem; font-weight: 600; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(.dropdown-menu, .box-title) { background: var(--reader-settings-surface); color: var(--reader-settings-text); border-color: var(--reader-settings-line); box-shadow: none; text-shadow: none; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(input, select, textarea, button, a, summary):focus-visible { outline: 2px solid var(--reader-settings-accent); outline-offset: 3px; }
+
+:is(.reader-settings-embedded, .reader-management-page) :is(input, select, textarea, button, a, summary) { scroll-margin-block: 24px; }
+
+:is(.reader-settings-embedded, .reader-management-page) .form-advanced-title { padding-block: 14px; width: auto; font-weight: 600; min-height: 44px; line-height: 1.6; text-align: start; }
+
+.reader-settings-embedded body { min-height: 0; }
+
+.reader-settings-embedded :where(.btn, button) { transition: none; }
+
+.reader-settings-embedded :is(.header, .aside, .close-aside, .nav_mobile, #nav_menu, .nav_menu) { display: none; }
+
+.reader-settings-embedded #global { margin: 0; padding: 0; display: block; width: 100%; height: auto; position: static; min-height: 0; }
+
+.reader-settings-embedded .post { padding: var(--reader-settings-padding, 16px); }
+
+.reader-settings-embedded .post > h1 { display: none; }
+
+.reader-settings-embedded .account-brand { display: none; }
+
+.reader-settings-embedded .prompt { margin: 0; padding: 16px; max-width: 32rem; width: 100%; text-align: start; }
+
+.reader-management-header { padding: 16px 28px; background: var(--reader-settings-surface); display: flex; border-bottom: 1px solid var(--reader-settings-line); min-height: 72px; align-items: center; justify-content: space-between; gap: 20px; }
+
+.reader-management-page .reader-management-brand { color: var(--reader-settings-text); font-size: 1.2rem; font-weight: 650; letter-spacing: -.04em; }
+
+.reader-management-return { padding: 10px 0; display: inline-flex; min-height: 44px; align-items: center; }
+
+.reader-management-page #global { margin: 0; padding: 0; display: block; width: 100%; height: auto; min-height: calc(100dvh - 77px); }
+
+.reader-management-page :is(.aside, .close-aside, .nav_mobile) { display: none; }
+
+.reader-management-page .post { margin-inline: auto; padding: 36px 28px 64px; max-width: 920px; width: 100%; }
+
+.reader-management-header nav { display: flex; align-items: center; gap: 24px; }
+
+.reader-management-header nav a { padding-block: 10px; display: inline-flex; min-height: 44px; align-items: center; }
+
+@media (prefers-color-scheme: dark) {
+	:is(.reader-settings-embedded, .reader-management-page):not([style*="--reader-settings-surface"]) {
+		--reader-settings-surface: #1b2027;
+		--reader-settings-subtle: #242a33;
+		--reader-settings-text: #e7ebf1;
+		--reader-settings-muted: #acb5c3;
+		--reader-settings-line: #46505e;
+		--reader-settings-accent: #a3c6f1;
+		--reader-settings-primary: #a3c6f1;
+		--reader-settings-on-accent: #172434;
+		--reader-settings-error: #f1a6a2;
+		color-scheme: dark;
+	}
+}
+
+@media (max-width: 800px) {
+	.reader-management-page #global { display: block; }
+
+	.reader-management-page .aside { display: none; }
+
+	.reader-management-page .post { padding: 24px 20px 48px; }
 }
 
 @media (max-width: 640px) {
-	.reader-settings-embedded .post {
-		padding: var(--reader-settings-padding, 8px);
-	}
+	.reader-settings-embedded .post { padding: var(--reader-settings-padding, 8px); }
 
-	.reader-settings-embedded .form-group {
-		grid-template-columns: minmax(0, 1fr);
-		gap: 8px;
-	}
+	:is(.reader-settings-embedded, .reader-management-page) .form-group { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 
-	.reader-settings-embedded .form-group > .group-controls {
-		grid-column: 1;
-	}
+	:is(.reader-settings-embedded, .reader-management-page) .form-group > .group-name { padding-block: 0 4px; }
+
+	:is(.reader-settings-embedded, .reader-management-page) .form-group > .group-controls { grid-column: 1; }
+
+	.reader-management-header { padding: 12px 20px; gap: 16px; }
+
+	.reader-management-return { font-size: .9333rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is(.reader-settings-embedded, .reader-management-page) :is(.btn, button) { transition: none; }
 }

@@ -41,6 +41,8 @@ final class FreshRSS_Context {
 }
 final class FreshRSS_View {
 	public array $readerBootstrap;
+	public string $readerScriptNonce;
+	public array $readerModuleAssets;
 	public function render(): void { include 'app/views/reader/index.phtml'; }
 }
 $schema = FreshRSS\\Services\\Reader\\Preferences::schema();
@@ -60,8 +62,12 @@ $bootstrap = [
 ];
 $view = new FreshRSS_View();
 $view->readerBootstrap = $bootstrap;
+$view->readerScriptNonce = bin2hex(random_bytes(16));
+$view->readerModuleAssets = FreshRSS\\Services\\Reader\\ModuleAssets::importMap();
+$csp = "default-src 'self'; script-src 'self' 'nonce-" . $view->readerScriptNonce . "'; style-src 'self' 'unsafe-inline'; "
+	. "img-src 'self' https: http: data:; media-src 'none'; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'";
 ob_start(); $view->render(); $html = ob_get_clean();
-echo json_encode(['html' => $html, 'bootstrap' => $bootstrap, 'account' => $account], JSON_THROW_ON_ERROR);
+echo json_encode(['html' => $html, 'bootstrap' => $bootstrap, 'account' => $account, 'csp' => $csp], JSON_THROW_ON_ERROR);
 `;
 	return JSON.parse(execFileSync(php, ['-r', source], { cwd: root, encoding: 'utf8' }));
 }
@@ -72,6 +78,7 @@ export const test = base.extend({
 		const server = createServer(async (request, response) => {
 			const pathname = new URL(request.url, 'http://localhost').pathname;
 			if (pathname === '/i/') {
+				response.setHeader('Content-Security-Policy', shell.csp);
 				response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(shell.html); return;
 			}
 			const file = resolve(publicRoot, '.' + pathname);
@@ -85,7 +92,7 @@ export const test = base.extend({
 		try { await use({ ...shell, origin }); } finally { await new Promise(_resolve => server.close(_resolve)); }
 	}, { scope: 'worker' }],
 	reader: async ({ page, readerServer }, use) => {
-		const { origin, bootstrap, html } = readerServer;
+		const { origin, bootstrap, html, csp } = readerServer;
 		const feeds = [
 			{ id: 1, name: '少数派', categoryId: 1, unread: 5, error: false, enabled: true, ttl: 3600, priority: 10, version: 'd'.repeat(64) },
 			{ id: 2, name: '阮一峰的网络日志', categoryId: 1, unread: 2, error: true, enabled: false, ttl: 0, priority: 10, version: 'd'.repeat(64) },
@@ -111,11 +118,13 @@ export const test = base.extend({
 			const url = new URL(request.url());
 			if (url.origin !== origin) return route.abort();
 			const action = url.searchParams.get('a');
-			if (url.searchParams.get('c') !== 'reader') return route.continue();
-			if (!action) {
+			const controller = url.searchParams.get('c');
+			const home = url.pathname === '/i/' && (!controller || controller === 'index') && (!action || action === 'index');
+			if (controller !== 'reader' && !home) return route.continue();
+			if (!action || home) {
 				const current = JSON.stringify({ ...bootstrap, preferences }).replaceAll('<', '\\u003c');
 				const body = html.replace(/(<script[^>]+id="reader-bootstrap"[^>]*>)[\s\S]*?(<\/script>)/, (_, start, end) => start + current + end);
-				return route.fulfill({ body, contentType: 'text/html; charset=utf-8' });
+				return route.fulfill({ body, contentType: 'text/html; charset=utf-8', headers: { 'Content-Security-Policy': csp } });
 			}
 			if (request.method() === 'POST') writes.push({ action, body: request.postDataJSON() });
 			if (action === 'feeds') {

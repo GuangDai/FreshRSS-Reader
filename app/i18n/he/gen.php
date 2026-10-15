@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'מימוש',
 		'add' => 'Add',	// TODO
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← חזרה להזנות הRSS שלך',
 		'cancel' => 'ביטול',
 		'close' => 'Close',	// TODO
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Remove',	// TODO
 		'rename' => 'Rename',	// TODO
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'ראו אתר',
 		'submit' => 'אישור',
 		'truncate' => 'מחיקת כל המאמרים',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'סיסמה',
 			'format' => '<small>At least 7 characters</small>',	// TODO
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// TODO

@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => '更新訂閱源',
 		'add' => '新增',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← 返回到您的 RSS 訂閱源',
 		'cancel' => '取消',
 		'close' => '關閉',
@@ -48,6 +49,7 @@ return array(
 		'remove' => '移除',
 		'rename' => '重新命名',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => '查看網站',
 		'submit' => '提交',
 		'truncate' => '刪除所有文章',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => '密碼',
 			'format' => '<small>至少 7 個字元</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => '需要重新驗證',

@@ -36,6 +36,26 @@ final class ApiContractTest extends TestCase {
 		self::assertSame(['_csrf', 'ids'], self::path($decoded, 'endpoints', 'batch', 'operations', 'POST', 'request', 'required'));
 	}
 
+	public function testAnonymousReadingContractAdvertisesOnlyPublicGetOperations(): void {
+		$contract = json_decode(json_encode(ApiContract::contract(['max_page_size' => 7, 'max_search_chars' => 19],
+			['maxBatchItems' => 3, 'maxRequestBytes' => 1234], readOnly: true), JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+		self::assertSame('anonymous', self::path($contract, 'authentication', 'type'));
+		self::assertNull(self::path($contract, 'authentication', 'csrfBodyField'));
+		self::assertSame([], self::path($contract, 'authentication', 'csrfMethods'));
+		$endpoints = self::path($contract, 'endpoints');
+		self::assertIsArray($endpoints);
+		self::assertSame(array_values(array_diff(ApiContract::PUBLIC_READ_ACTIONS, ['index'])), array_keys($endpoints));
+		foreach ($endpoints as $endpoint) {
+			self::assertSame(['GET'], self::path($endpoint, 'methods'));
+			$operations = self::path($endpoint, 'operations');
+			self::assertIsArray($operations);
+			self::assertSame(['GET'], array_keys($operations));
+		}
+		self::assertSame('anonymous', self::path($contract, 'endpoints', 'capabilities', 'operations', 'GET',
+			'response', 'properties', 'authentication', 'const'));
+		self::assertTrue(self::path($contract, 'endpoints', 'schema', 'operations', 'GET', 'response', 'properties', 'readOnly', 'const'));
+	}
+
 	public function testRouteTableCoversEveryReaderAction(): void {
 		$actions = [];
 		foreach ((new ReflectionClass(FreshRSS_reader_Controller::class))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
@@ -83,6 +103,27 @@ final class ApiContractTest extends TestCase {
 				self::fail('Array query parameter must be rejected');
 			} catch (ApiException $exception) {
 				self::assertSame($error, $exception->getMessage());
+			}
+		}
+	}
+
+	public function testLegacyLabelStreamsAndReadingStatesRemainAvailableFromHomeLinks(): void {
+		foreach (['t_42' => ['t', 42], 'T' => ['T', 0], 'Z' => ['Z', 0]] as $stream => [$type, $id]) {
+			$request = ApiContract::listing(['get' => $stream, 'state' => '96'], ['max_page_size' => 10, 'max_search_chars' => 20]);
+			self::assertSame($type, $request['type']);
+			self::assertSame($id, $request['id']);
+			self::assertSame(96, $request['state']);
+		}
+		foreach ([1, '2', 3, '4', 5, 6, 8, 32, 64, 96] as $state) {
+			$request = ApiContract::listing(['state' => $state], ['max_page_size' => 10, 'max_search_chars' => 20]);
+			self::assertSame((int)$state, $request['state']);
+		}
+		foreach (['', '0', '-1', '01', '1e2', '999999999999999999999999', 16, 112, true, ['1']] as $value) {
+			try {
+				ApiContract::listing(['state' => $value], ['max_page_size' => 10, 'max_search_chars' => 20]);
+				self::fail('An invalid legacy state must not change the reading query');
+			} catch (ApiException $exception) {
+				self::assertSame('invalid_state', $exception->getMessage());
 			}
 		}
 	}

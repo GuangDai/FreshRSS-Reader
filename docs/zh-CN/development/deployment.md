@@ -1,6 +1,6 @@
 # Docker 部署
 
-本仓库的部署镜像为 `ghcr.io/guangdai/freshrss-reader`，包含独立 Reader、规则、订阅管理和持久化刷新队列。
+本仓库的部署镜像为 `ghcr.io/guangdai/freshrss-reader`，包含默认阅读主页、规则、订阅管理和持久化刷新队列。
 使用 Debian 13、Apache 和 PHP 8.4，支持 `linux/amd64`、`linux/arm64`。
 镜像公开发布，可直接拉取，无需登录 GitHub Container Registry。
 上游 `freshrss/freshrss` 镜像不包含本仓库新增的功能。
@@ -19,6 +19,7 @@ docker compose ps
 访问 `http://服务器地址:8080/i/`，在安装向导中选择 SQLite，并设置管理员账号和密码。
 默认无需配置数据库密码；SQLite 数据库、用户配置、订阅、文章和刷新队列均存储在持久化卷中。
 启用公网访问前，应通过 HTTPS 反向代理完成安装和登录。
+登录后 `i/` 直接显示阅读主页，不需要额外的阅读器地址。主题和账号设置在设置页修改，保存成功后应用。
 
 根目录的 `docker-compose.yml` 用于部署，`Docker/development/compose.yaml` 用于本地开发，两者使用不同的项目名和数据卷。
 启动根目录配置不会自动接入已有开发数据。

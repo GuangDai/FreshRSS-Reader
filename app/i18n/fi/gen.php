@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Päivitä syötteet',
 		'add' => 'Lisää',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Palaa RSS-syötteisiin',
 		'cancel' => 'Peruuta',
 		'close' => 'Sulje',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Poista',
 		'rename' => 'Nimeä uudelleen',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Siirry sivustolle',
 		'submit' => 'Lähetä',
 		'truncate' => 'Poista kaikki artikkelit',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Salasana',
 			'format' => '<small>Vähintään 7 merkkiä</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Uudelleentodentaminen tarvitaan',

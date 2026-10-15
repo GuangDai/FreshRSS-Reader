@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Hírforrások frissítése',
 		'add' => 'Hozzáad',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Vissza az RSS hírforrásokhoz',
 		'cancel' => 'Mégsem',
 		'close' => 'Bezár',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Eltávolít',
 		'rename' => 'Átnevez',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Ugrás a forrásra',
 		'submit' => 'Mentés',
 		'truncate' => 'Minden cikk törlése',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Jelszó',
 			'format' => '<small>Legalább 7 karakter hosszú</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Be kell jelentkeznie újra',

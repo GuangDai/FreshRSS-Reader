@@ -1,0 +1,155 @@
+.reader-account-page {
+	--account-canvas: #f7f8fa;
+	--account-surface: #fff;
+	--account-text: #20242b;
+	--account-muted: #606a78;
+	--account-line: #dce1e7;
+	--account-accent: #315a8b;
+	--account-on-accent: #fff;
+	--account-error: #b33a36;
+	background: var(--account-canvas);
+	height: auto;
+	color: var(--account-text);
+	font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans CJK SC", sans-serif;
+	font-size: 15px;
+	color-scheme: light;
+}
+
+.reader-account-page * { box-sizing: border-box; }
+
+.reader-account-page body {
+	margin: 0;
+	padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+	background: var(--account-canvas);
+	height: auto;
+	color: var(--account-text);
+	font: inherit;
+	line-height: 1.6;
+	min-height: 100dvh;
+}
+
+.reader-account-page #global { margin: 0; display: block; width: 100%; height: auto; }
+
+.reader-account-page main.account-prompt {
+	margin: clamp(16px, 8vh, 96px) auto 0;
+	padding: 32px;
+	background: var(--account-surface);
+	max-width: 440px;
+	width: 100%;
+	border: 1px solid var(--account-line);
+	border-radius: 12px;
+	box-shadow: none;
+	text-align: start;
+}
+
+.reader-account-page .account-brand { margin-bottom: 28px; display: inline-block; color: var(--account-text); font-size: 1.2rem; font-weight: 650; letter-spacing: -.04em; text-decoration: none; }
+
+.reader-account-page .account-prompt h1 { margin: 0; color: var(--account-text); font-size: 1.7333rem; font-weight: 650; line-height: 1.4; letter-spacing: -.035em; text-wrap: balance; }
+
+.reader-account-page .account-prompt form { margin-block: 24px 0; text-align: start; }
+
+.reader-account-page .form-group { margin: 0 0 20px; padding: 0; display: grid; width: 100%; gap: 8px; }
+
+.reader-account-page .form-group::after { display: none; }
+
+.reader-account-page .form-group > label { margin: 0; padding: 0; color: var(--account-text); font-weight: 500; line-height: 1.5; min-height: 0; }
+
+.reader-account-page :is(input, select, button) { font: inherit; }
+
+.reader-account-page :is(input:not([type="checkbox"], [type="hidden"]), select) {
+	margin: 0;
+	padding: 10px 12px;
+	background: var(--account-surface);
+	max-width: 100%;
+	width: 100%;
+	color: var(--account-text);
+	border: 1px solid color-mix(in srgb, var(--account-text) 50%, var(--account-surface));
+	border-radius: 6px;
+	box-shadow: none;
+	min-height: 44px;
+	min-width: 0;
+}
+
+.reader-account-page .stick { display: flex; width: 100%; align-items: stretch; }
+
+.reader-account-page .stick input { border-start-end-radius: 0; border-end-end-radius: 0; flex: 1; }
+
+.reader-account-page .btn {
+	margin: 0;
+	padding: 10px 16px;
+	background: var(--account-surface);
+	display: inline-flex;
+	color: var(--account-text);
+	border: 1px solid var(--account-line);
+	border-radius: 6px;
+	box-shadow: none;
+	min-height: 44px;
+	align-items: center;
+	justify-content: center;
+	line-height: 1.5;
+	text-shadow: none;
+	cursor: pointer;
+	transition: background-color 140ms ease;
+}
+
+.reader-account-page .btn:hover { background: var(--account-canvas); }
+
+.reader-account-page .stick .toggle-password { margin: 0; padding: 10px; width: 44px; border-inline-start: 0; border-start-start-radius: 0; border-end-start-radius: 0; flex-shrink: 0; }
+
+.reader-account-page .toggle-password[aria-pressed="true"] { background: var(--account-canvas); color: var(--account-accent); }
+
+.reader-account-page .form-group > .checkbox { padding-block: 8px; display: flex; min-height: 44px; align-items: center; gap: 10px; font-weight: 400; }
+
+.reader-account-page .checkbox input { margin: 0; accent-color: var(--account-accent); flex-shrink: 0; }
+
+.reader-account-page .checkbox small { font-size: inherit; }
+
+.reader-account-page .form-group-actions { margin-bottom: 0; gap: 16px; text-align: center; }
+
+.reader-account-page .btn-important { background: var(--account-accent); width: 100%; color: var(--account-on-accent); font-weight: 600; border-color: var(--account-accent); }
+
+.reader-account-page .btn-important:hover { background: color-mix(in srgb, var(--account-accent) 90%, var(--account-text)); color: var(--account-on-accent); border-color: transparent; }
+
+.reader-account-page .btn:disabled { opacity: .5; cursor: wait; }
+
+.reader-account-page :where(a, button.as-link) { color: var(--account-accent); }
+
+.reader-account-page .help, .reader-account-page .help small { margin-block: 0; color: var(--account-muted); font-size: .8667rem; line-height: 1.65; }
+
+.reader-account-page main.prompt .link-registration { margin: 16px 0 0; padding: 0; font-size: .9333rem; }
+
+.reader-account-page .main-footer { margin: 20px auto 0; padding: 0; max-width: 440px; color: var(--account-muted); font-size: .8667rem; text-align: center; }
+
+.reader-account-page .main-footer a { color: inherit; }
+
+.reader-account-page :is(input, select, button, a):focus-visible { outline: 2px solid var(--account-accent); outline-offset: 3px; }
+
+.reader-account-page input:user-invalid { border-color: var(--account-error); }
+
+.reader-account-page .notification { background: var(--account-surface); max-width: calc(100% - 40px); color: var(--account-text); border: 1px solid var(--account-line); border-radius: 8px; box-shadow: none; text-shadow: none; }
+
+.reader-account-page .notification.bad { border-color: var(--account-error); }
+
+.reader-account-page .notification .close { min-height: 44px; min-width: 44px; }
+
+@media (prefers-color-scheme: dark) {
+	.reader-account-page {
+		--account-canvas: #171b21;
+		--account-surface: #1f252e;
+		--account-text: #e7ebf1;
+		--account-muted: #acb5c3;
+		--account-line: #46505e;
+		--account-accent: #a3c6f1;
+		--account-on-accent: #172434;
+		--account-error: #f1a6a2;
+		color-scheme: dark;
+	}
+}
+
+@media (max-width: 480px) {
+	.reader-account-page main.account-prompt { margin-top: 20px; padding: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reader-account-page .btn { transition: none; }
+}

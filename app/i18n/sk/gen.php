@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Aktualizovať kanály',
 		'add' => 'Pridať',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Späť na vaše RSS kanály',
 		'cancel' => 'Zrušiť',
 		'close' => 'Close',	// TODO
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Odstrániť',
 		'rename' => 'Premenovať',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Zobraziť webovú stránku',
 		'submit' => 'Poslať',
 		'truncate' => 'Vymazať všetky články',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Heslo',
 			'format' => '<small>Najmenej 7 znakov</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// TODO

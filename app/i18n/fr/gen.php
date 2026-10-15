@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Actualiser flux',
 		'add' => 'Ajouter',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Retour à vos flux RSS',
 		'cancel' => 'Annuler',
 		'close' => 'Fermer',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Supprimer',
 		'rename' => 'Renommer',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Voir le site',
 		'submit' => 'Valider',
 		'truncate' => 'Supprimer tous les articles',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Mot de passe',
 			'format' => '<small>7 caractères minimum</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Une réauthentification est requise',

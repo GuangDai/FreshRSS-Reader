@@ -32,13 +32,13 @@ const settingsPage = new SettingsPage({
 	element,
 	t,
 	onSection: section => { navigation.setSettingsSection(section); settingsPage.activate(section, true); },
+	onDirty: () => syncSettingsSave(),
 	onAccountSaved: values => {
 		bootstrap.autoMarkArticle = Boolean(values['mark_when.article']); bootstrap.autoMarkSite = Boolean(values['mark_when.site']);
 	},
 	onError: error => { if (error?.status === 403) { store.reportError(error); renderStatus(); } },
 });
 settingsPage.mount();
-const readingPreview = $('reading-preview');
 const media = matchMedia('(prefers-color-scheme: dark)');
 const mobile = matchMedia('(max-width: 820px), (max-height: 500px) and (max-width: 1100px) and (any-pointer: coarse)');
 const forcedColours = matchMedia('(forced-colors: active)');
@@ -50,7 +50,6 @@ const entryNodes = new Map();
 let frameKey = '';
 let imageArticle = null;
 let appearancePalette = null;
-let appearanceArticleFrame = null;
 let refreshTimer = 0;
 let pageActive = true;
 let clearedSession = -1;
@@ -95,7 +94,7 @@ const navigation = new ReaderNavigation({ history: window.history, location: win
 settingsSubscriptions.mount();
 
 function sameList(value) {
-	return store.cursor === value.cursor && ['get', 'filter', 'search'].every(key => store.query[key] === value.query[key]);
+	return store.cursor === value.cursor && ['get', 'filter', 'search', 'state'].every(key => store.query[key] === value.query[key]);
 }
 
 function navigationSnapshot() {
@@ -123,14 +122,13 @@ async function restoreNavigation(value, panel, load = false) {
 	const showSettings = panel === 'settings' || (panel === 'feed-settings' && navigation.current?.panels.includes('settings'));
 	if (!settingsRoot.hidden && !showSettings) {
 		readerDraft = settingsPage.readerDirty ? formValues() : null;
-		appearanceEpoch++; applyAppearance(saved); releaseAppearanceFrame(); closeSettingsPage();
+		appearanceEpoch++; closeSettingsPage();
 	}
 	if (feedEditor.dialog.open && panel !== 'feed-settings') feedEditor.dialog.close();
 	if (previousSidebar !== (panel === 'sidebar')) sidebar(panel === 'sidebar', false);
 	if (showSettings) {
 		if (settingsRoot.hidden) {
-			appearanceEpoch++; fillSettings(readerDraft || saved); validateSettings(readerDraft || saved); retainAppearanceFrame();
-			applyAppearance(readerDraft || saved); showSettingsPage();
+			appearanceEpoch++; fillSettings(readerDraft || saved); validateSettings(readerDraft || saved); showSettingsPage();
 		}
 		settingsPage.activate(navigation.settingsSection);
 	}
@@ -177,7 +175,12 @@ function buildSettings() {
 	settingsRoot.querySelectorAll('[data-reader-preferences]').forEach(node => node.replaceChildren());
 	$('server-limits').replaceChildren();
 	const groups = new Map();
-	const order = ['theme', 'lightTheme', 'darkTheme', 'layout', 'density', 'style'];
+	const appearanceGroups = {
+		theme: ['theme', 'lightTheme', 'darkTheme'],
+		list: ['layout', 'density', 'style'],
+		sizes: ['sidebarWidth', 'listWidth'],
+	};
+	const order = Object.values(appearanceGroups).flat();
 	const fields = Object.entries(schema).sort(([a], [b]) => {
 		const rank = key => order.includes(key) ? order.indexOf(key) : order.length;
 		return rank(a) - rank(b);
@@ -189,55 +192,62 @@ function buildSettings() {
 		let input;
 		if (spec.type === 'enum') {
 			input = element('select');
-			for (const option of spec.options) {
-				const node = element('option', '', THEME_NAMES.includes(option) ? themeName(option) : t(option)); node.value = option; input.append(node);
+			if (['theme', 'lightTheme', 'darkTheme'].includes(key)) {
+				if (spec.options.includes('auto')) {
+					const option = element('option', '', t('auto')); option.value = 'auto'; input.append(option);
+				}
+				for (const dark of [false, true]) {
+					const group = element('optgroup'); group.label = t(dark ? 'darkPalette' : 'lightPalette');
+					for (const name of spec.options.filter(name => THEME_NAMES.includes(name) && themeSpec(name).dark === dark)) {
+						const option = element('option', '', themeName(name)); option.value = name; group.append(option);
+					}
+					input.append(group);
+				}
+			} else {
+				for (const option of spec.options) {
+					const node = element('option', '', t(option)); node.value = option; input.append(node);
+				}
 			}
 		} else {
 			input = element('input');
 			input.type = spec.type === 'boolean' ? 'checkbox' : 'number';
 			if (spec.type === 'integer') {
 				input.min = spec.min; input.max = spec.max; input.step = 1;
-				const unit = t(spec.unit);
-				heading.append(element('small', 'setting-range', `${spec.min}–${spec.max} ${unit}`));
+				heading.append(element('small', 'setting-help', t(key + 'Help')));
 			}
 		}
 		input.name = key;
 		input.setAttribute('form', 'appearance-form');
 		input.required = spec.type !== 'boolean';
 		input.setAttribute('aria-describedby', 'settings-status');
-		label.append(heading, input);
-		const section = ['cacheArticles', 'cacheMiB'].includes(key)
-			? 'storage'
-			: key === 'pageSize'
-				? 'reading'
-				: ['requestTimeout', 'refreshInterval'].includes(key) ? 'automation' : spec.group;
-		if (!groups.has(section)) {
+		label.append(heading);
+		if (spec.type === 'integer') {
+			const control = element('span', 'setting-number-control');
+			const unit = element('span', 'setting-unit', t(spec.unit)); unit.setAttribute('aria-hidden', 'true');
+			input.setAttribute('aria-label', `${t(key)} (${t(spec.unit)})`); control.append(input, unit); label.append(control);
+		} else label.append(input);
+		const appearanceGroup = Object.keys(appearanceGroups).find(group => appearanceGroups[group].includes(key));
+		const section = appearanceGroup
+			? 'appearance'
+			: ['cacheArticles', 'cacheMiB'].includes(key)
+				? 'storage'
+				: key === 'pageSize'
+					? 'reading'
+					: ['requestTimeout', 'refreshInterval'].includes(key) ? 'automation' : spec.group;
+		const groupKey = appearanceGroup || section;
+		if (!groups.has(groupKey)) {
 			const group = element('fieldset', 'settings-grid');
-			group.append(element('legend', '', t(section === 'storage' ? 'articleCache' : section === 'automation' ? 'connectionSync' : spec.group)));
-			groups.set(section, group);
-			settingsRoot.querySelector(`[data-reader-preferences="${section}"]`).append(group);
+			const title = appearanceGroup
+				? { theme: 'appearanceTheme', list: 'appearanceList', sizes: 'appearanceSizes' }[appearanceGroup]
+				: section === 'storage' ? 'articleCache' : section === 'automation' ? 'connectionSync' : spec.group;
+			groups.set(groupKey, group);
+			const panel = settingsRoot.querySelector(`[data-reader-preferences="${section}"]`);
+			if (appearanceGroup === 'sizes') {
+				const details = element('details', 'advanced-settings'); details.append(element('summary', '', t(title)), group);
+				group.setAttribute('aria-label', t(title)); panel.append(details);
+			} else { group.append(element('legend', '', t(title))); panel.append(group); }
 		}
-		groups.get(section).append(label);
-		if (key === 'lineHeight') groups.get(section).append(readingPreview);
-		if (key === 'theme') {
-			const details = element('details', 'theme-browser');
-			details.append(element('summary', '', t('browseThemes').replace('{count}', THEME_NAMES.length)));
-			const gallery = element('div', 'theme-gallery');
-			gallery.setAttribute('role', 'group'); gallery.setAttribute('aria-label', t('theme'));
-			for (const name of THEME_NAMES) {
-				const spec = themeSpec(name);
-				const button = element('button', 'theme-option');
-				button.type = 'button'; button.dataset.chooseTheme = name;
-				button.setAttribute('aria-pressed', 'false');
-				const swatches = element('span', 'theme-swatches'); swatches.setAttribute('aria-hidden', 'true');
-				for (const key of ['base-100', 'base-content', 'primary', 'secondary', 'accent']) {
-					const swatch = element('span'); swatch.style.background = spec.tokens[`--color-${key}`]; swatches.append(swatch);
-				}
-				button.append(swatches, element('span', 'theme-option-name', themeName(name)), element('small', '', t(spec.dark ? 'darkPalette' : 'lightPalette')));
-				gallery.append(button);
-			}
-			details.append(gallery); groups.get(section).append(details);
-		}
+		groups.get(groupKey).append(label);
 	}
 	for (const section of ['storage', 'automation']) {
 		groups.get(section)?.after(element('p', 'settings-note', t(section === 'storage' ? 'cacheNote' : 'updateNote')));
@@ -271,7 +281,7 @@ function fillSettings(values) {
 function syncSettingsSave(values = formValues()) {
 	if (form.getAttribute('aria-busy') === 'true') return;
 	const unchanged = Object.keys(schema).every(key => values[key] === saved[key]);
-	$('save-reader-settings').disabled = store.csrfInvalid || (unchanged && !preferenceErrors(values, schema).length);
+	$('save-reader-settings').disabled = store.csrfInvalid || (unchanged && !settingsPage.hasNativeDraft() && !preferenceErrors(values, schema).length);
 	settingsPage.syncSavebar(!unchanged);
 }
 
@@ -282,7 +292,6 @@ function syncThemeSettings(values) {
 		const label = settingsRoot.querySelector(`[data-preference="${key}"]`);
 		if (label) label.hidden = values.theme !== 'auto';
 	}
-	settingsRoot.querySelectorAll('[data-choose-theme]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.chooseTheme === values.theme)));
 }
 
 function formValues() {
@@ -329,9 +338,6 @@ function applyAppearance(values) {
 		for (const [key, value] of Object.entries(appearanceColours(document.body))) document.body.style.setProperty(key, value);
 		if (values.style === 'contrast') document.body.style.setProperty('--muted', getComputedStyle(document.body).getPropertyValue('--text'));
 	}
-	syncThemeSettings(values);
-	$('preview-theme-name').textContent = themeName(theme.name);
-	$('preview-theme-mode').textContent = t(theme.dark ? 'darkPalette' : 'lightPalette');
 	for (const [key, css] of Object.entries({
 		sidebarWidth: '--sidebar-width',
 		listWidth: '--list-width',
@@ -397,7 +403,7 @@ function renderList() {
 	const canPage = Boolean(store.history.length || store.next);
 	const unread = store.items.some(item => !item.read);
 	$('previous-page').hidden = $('next-page').hidden = !canPage && !store.loading;
-	$('mark-page-read').hidden = !unread && !store.batchProgress && !store.pending.size;
+	$('mark-page-read').hidden = Boolean(bootstrap.readOnly) || (!unread && !store.batchProgress && !store.pending.size);
 	document.querySelector('.pagination').hidden = !canPage && !store.loading && !unread && !store.batchProgress && !store.pending.size;
 	$('previous-page').disabled = store.loading || !store.history.length;
 	$('next-page').disabled = store.loading || !store.next;
@@ -407,7 +413,7 @@ function renderList() {
 		? t('loading')
 		: t('pageSummary').replace('{page}', String(store.history.length + 1)).replace('{count}', String(store.items.length));
 	const feed = feedTree.feedsById.get(Number(store.query.get.slice(2)));
-	$('view-title').textContent = feed ? feed.name : t(store.query.filter);
+	$('view-title').textContent = feed ? feed.name + (store.query.filter === 'all' ? '' : ' · ' + t(store.query.filter)) : t(store.query.filter);
 	if (renderedItems !== store.items) {
 		renderedItems = store.items;
 		entryNodes.clear();
@@ -482,7 +488,6 @@ function renderArticle() {
 	$('mark-star').querySelector('[aria-hidden]').className = `reader-icon ${active?.starred ? 'icon-starred' : 'icon-star'}`;
 	$('article-frame').hidden = !article;
 	if (!article) {
-		releaseAppearanceFrame();
 		if (frameKey) {
 			const frame = $('article-frame').cloneNode(false); frame.removeAttribute('srcdoc'); $('article-frame').replaceWith(frame); frameKey = '';
 		}
@@ -504,30 +509,12 @@ function renderArticle() {
 		current.readingWidth, palette, forcedColours.matches, images, metadata]);
 	if (key !== frameKey) {
 		frameKey = key;
-		if (appearanceArticleFrame?.key === key && appearanceArticleFrame.frame.isConnected) {
-			if ($('article-frame') !== appearanceArticleFrame.frame) $('article-frame').remove();
-			appearanceArticleFrame.frame.id = 'article-frame'; appearanceArticleFrame.frame.hidden = false;
-			return;
-		}
 		// A new browsing context avoids accumulating srcdoc navigations in the browser's Back history.
 		const frame = $('article-frame').cloneNode(false);
 		frame.title = article.title;
 		frame.srcdoc = articleDocument(article, current, palette, images, { media: t('openMedia'), image: t('imagesOff'), byline: metadata });
-		if ($('article-frame') === appearanceArticleFrame?.frame) {
-			appearanceArticleFrame.frame.id = 'saved-article-frame'; appearanceArticleFrame.frame.hidden = true;
-			appearanceArticleFrame.frame.after(frame);
-		} else $('article-frame').replaceWith(frame);
+		$('article-frame').replaceWith(frame);
 	}
-}
-
-function retainAppearanceFrame() {
-	releaseAppearanceFrame();
-	if (store.article && frameKey) appearanceArticleFrame = { key: frameKey, frame: $('article-frame') };
-}
-
-function releaseAppearanceFrame() {
-	if (appearanceArticleFrame && appearanceArticleFrame.frame !== $('article-frame')) appearanceArticleFrame.frame.remove();
-	appearanceArticleFrame = null;
 }
 
 function articlePalette() {
@@ -579,6 +566,11 @@ function renderStatus() {
 		$('save-reader-settings').disabled = true;
 		$('save-server-limits').disabled = true;
 		$('quick-layout').disabled = true;
+	}
+	if (bootstrap.readOnly) {
+		for (const id of ['mark-read', 'mark-star', 'mark-page-read', 'quick-layout', 'open-settings']) {
+			$(id).hidden = true; $(id).disabled = true;
+		}
 	}
 }
 
@@ -641,17 +633,15 @@ async function persist(values, token = appearanceToken()) {
 		store.pageSize = saved.pageSize;
 		store.cache.configure(saved.cacheArticles, saved.cacheMiB * bytesPerMiB);
 		api.timeoutSeconds = saved.requestTimeout;
-		const updatePreview = settingsRoot.hidden || currentAppearanceToken(token);
-		if (updatePreview) applyAppearance(saved);
+		applyAppearance(saved);
 		resetPolling();
-		notice = t(updatePreview ? 'saved' : 'previousSettingsSaved'); store.error = null;
+		notice = t(currentAppearanceToken(token) ? 'saved' : 'previousSettingsSaved'); store.error = null;
 		if (previousPageSize !== saved.pageSize) await queryList({});
 		renderStatus();
 		return true;
 	} catch (error) {
 		if (epoch !== store.sessionEpoch) return false;
 		store.reportError(error);
-		if (settingsRoot.hidden) applyAppearance(saved);
 		renderStatus(); return false;
 	}
 }
@@ -697,6 +687,9 @@ function openArticle(id) {
 }
 function closeArticle() { cancelArticleNavigation(); navigation.closeArticle(navigationSnapshot(), settingsPage.toolDirty); }
 
+document.body.dataset.readOnly = String(Boolean(bootstrap.readOnly));
+if (bootstrap.readOnly) document.querySelectorAll('[data-open-settings]').forEach(link => { link.hidden = true; });
+$('sign-in').hidden = !bootstrap.readOnly;
 buildSettings(); localise(); applyAppearance(saved);
 document.querySelector('.skip-link').addEventListener('click', event => {
 	if (settingsRoot.hidden) return;
@@ -804,8 +797,14 @@ $('original-link').addEventListener('click', () => {
 $('toggle-sidebar').addEventListener('click', () => sidebar(document.body.dataset.sidebarOpen !== 'true'));
 $('close-sidebar').addEventListener('click', () => sidebar(false));
 $('refresh').addEventListener('click', async () => {
+	const button = $('refresh');
+	button.disabled = true; button.setAttribute('aria-busy', 'true');
 	store.cache.clear();
-	try { await Promise.all([queryList({}), store.feedsRefresh()]); } catch (error) { store.reportError(error); renderStatus(); }
+	try {
+		await Promise.all([queryList({}), store.feedsRefresh()]);
+	} catch (error) {
+		store.reportError(error); renderStatus();
+	} finally { button.disabled = false; button.setAttribute('aria-busy', 'false'); }
 });
 function retryRequest(event) {
 	if (event.target.closest('[data-reload-reader]')) { window.location.reload(); return; }
@@ -816,11 +815,15 @@ function retryRequest(event) {
 $('status').addEventListener('click', retryRequest);
 $('article-status').addEventListener('click', retryRequest);
 $('settings-status').addEventListener('click', retryRequest);
-$('open-settings').addEventListener('click', () => {
+function openSettings(section = navigation.settingsSection) {
 	appearanceEpoch++; fillSettings(readerDraft || saved); validateSettings(readerDraft || saved); sidebar(false);
-	applyAppearance(readerDraft || saved);
-	retainAppearanceFrame(); navigation.openPanel('settings', navigationSnapshot()); showSettingsPage(); settingsPage.activate(navigation.settingsSection, true);
-});
+	navigation.openPanel('settings', navigationSnapshot()); navigation.setSettingsSection(section);
+	showSettingsPage(); settingsPage.activate(section, true);
+}
+$('open-settings').addEventListener('click', () => openSettings());
+document.querySelectorAll('[data-open-settings]').forEach(link => link.addEventListener('click', event => {
+	event.preventDefault(); openSettings(link.dataset.openSettings);
+}));
 function showSettingsPage() {
 	settingsRoot.hidden = false; document.querySelector('.reader-shell').hidden = true;
 	settingsPage.open(); syncFocusRegions();
@@ -832,23 +835,18 @@ function closeSettingsPage() {
 function cancelSettings() {
 	const retainTool = settingsPage.toolDirty;
 	readerDraft = settingsPage.readerDirty ? formValues() : null;
-	appearanceEpoch++; applyAppearance(saved); releaseAppearanceFrame(); closeSettingsPage();
+	appearanceEpoch++; closeSettingsPage();
 	if (retainTool) navigation.closeSettingsPreservingFrame(navigationSnapshot());
 	else navigation.closePanel('settings', navigationSnapshot());
 }
 $('cancel-settings').addEventListener('click', cancelSettings);
 $('discard-settings').addEventListener('click', () => {
-	readerDraft = null; appearanceDraftRevision++; fillSettings(saved); validateSettings(saved); applyAppearance(saved);
+	readerDraft = null; appearanceDraftRevision++; fillSettings(saved); validateSettings(saved);
+	settingsPage.resetSettings(); syncSettingsSave();
 });
 settingsRoot.addEventListener('input', event => {
 	if (event.target.getAttribute('form') !== 'appearance-form') return;
-	appearanceDraftRevision++; const values = formValues(); if (validateSettings(values)) applyAppearance(values);
-});
-settingsRoot.addEventListener('click', event => {
-	const button = event.target.closest('[data-choose-theme]');
-	if (!button) return;
-	form.elements.namedItem('theme').value = button.dataset.chooseTheme;
-	form.elements.namedItem('theme').dispatchEvent(new Event('input', { bubbles: true }));
+	appearanceDraftRevision++; const values = formValues(); validateSettings(values); syncThemeSettings(values);
 });
 form.addEventListener('submit', async event => {
 	event.preventDefault();
@@ -856,19 +854,24 @@ form.addEventListener('submit', async event => {
 	const button = $('save-reader-settings'); button.disabled = true;
 	button.textContent = t('saving'); form.setAttribute('aria-busy', 'true');
 	try {
-		if (await persist(formValues(), token) && currentAppearanceToken(token)) {
-			readerDraft = null; releaseAppearanceFrame(); retainAppearanceFrame(); fillSettings(saved);
+		const values = formValues();
+		if (Object.keys(schema).some(key => values[key] !== saved[key])) {
+			if (!await persist(values, token)) return;
+			if (currentAppearanceToken(token)) { readerDraft = null; fillSettings(saved); }
 		}
+		if (!await settingsPage.saveSettings()) {
+			notice = t('settingsIncomplete'); renderStatus();
+		} else { notice = t(currentAppearanceToken(token) ? 'saved' : 'previousSettingsSaved'); renderStatus(); }
 	} finally { button.textContent = t('save'); form.setAttribute('aria-busy', 'false'); syncSettingsSave(); }
 });
 $('reset-settings').addEventListener('click', () => {
-	appearanceDraftRevision++; const values = defaults(schema); fillSettings(values); validateSettings(values); applyAppearance(values);
+	appearanceDraftRevision++; const values = defaults(schema); fillSettings(values); validateSettings(values);
 });
 $('quick-layout').addEventListener('change', async event => {
 	const input = event.currentTarget;
 	if (input.value === quickLayout(saved.layout) || store.csrfInvalid) return;
 	input.disabled = true;
-	try { await persist({ ...saved, layout: input.value }); } finally { input.disabled = store.csrfInvalid; }
+	try { await persist({ ...saved, layout: input.value }); } finally { syncQuickLayout(); input.disabled = store.csrfInvalid || Boolean(bootstrap.readOnly); }
 });
 $('save-server-limits').addEventListener('click', async event => {
 	if (store.csrfInvalid) return;
@@ -887,9 +890,9 @@ $('save-server-limits').addEventListener('click', async event => {
 		saved = preferences(data.preferences, schema);
 		buildSettings(); localise(settingsRoot);
 		const invalidDraft = draft ? preferenceErrors(draft, schema) : [];
-		const preview = draft ? { ...saved, ...Object.fromEntries(Object.entries(draft).filter(([key]) => !invalidDraft.includes(key))) } : saved;
+		const draftValues = draft ? { ...saved, ...Object.fromEntries(Object.entries(draft).filter(([key]) => !invalidDraft.includes(key))) } : saved;
 		appearanceDraftRevision++;
-		fillSettings(preview); applyAppearance(preview);
+		fillSettings(draftValues); applyAppearance(saved);
 		store.pageSize = saved.pageSize;
 		store.cache.configure(saved.cacheArticles, saved.cacheMiB * bytesPerMiB);
 		api.timeoutSeconds = saved.requestTimeout;
@@ -920,7 +923,7 @@ $('import-file').addEventListener('change', async event => {
 		const data = JSON.parse(await file.text());
 		if (settingsRoot.hidden || !currentAppearanceToken(token)) return;
 		if (data.format !== 'freshrss-reader' || data.version !== 1 || preferenceErrors(data.preferences, schema).length) throw new Error('invalid');
-		const values = preferences(data.preferences, schema); appearanceDraftRevision++; fillSettings(values); validateSettings(values); applyAppearance(values);
+		const values = preferences(data.preferences, schema); appearanceDraftRevision++; fillSettings(values); validateSettings(values);
 	} catch {
 		if (!settingsRoot.hidden && currentAppearanceToken(token)) {
 			notice = t('importFailed').replace('{limit}', String(bootstrap.limits.max_settings_bytes / 1024)); renderStatus();
@@ -973,7 +976,7 @@ window.addEventListener('message', event => {
 		event.data.event !== 'navigation') return;
 	restoreFrameNavigation();
 });
-const initialNavigation = navigation.start(navigationSnapshot());
+const initialNavigation = navigation.start({ ...navigationSnapshot(), query: { ...store.query, ...bootstrap.initialQuery } });
 render();
 Promise.all([store.feedsRefresh(), restoreNavigation(initialNavigation, navigation.panel, true)]).then(() => {
 	// Feed names may arrive after the compact article list.

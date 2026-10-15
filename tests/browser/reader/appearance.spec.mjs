@@ -50,53 +50,41 @@ async function articleColours(page) {
 	}));
 }
 
-test('all 32 themes preview without saving, maintain readable text, and cancel restores the saved theme', async ({ page, reader }, testInfo) => {
+test('theme selection stays a draft without changing the page or article', async ({ page, reader }) => {
 	const mobile = await page.locator('#toggle-sidebar').isVisible();
+	let article;
 	if (!mobile) {
 		await page.locator('.entry-card').first().click();
 		await expect(page.locator('#article-frame')).toBeVisible();
+		article = await articleColours(page);
+		await page.evaluate(() => { globalThis.originalArticleFrame = document.getElementById('article-frame'); });
 	}
 	await openSettings(page);
 	expect(THEME_NAMES).toHaveLength(32);
 	const select = page.locator('[name=theme]');
-	expect(await select.locator('option').evaluateAll(nodes => nodes.map(node => node.value))).toEqual(['auto', ...THEME_NAMES]);
-	await expect(page.locator('[data-choose-theme]')).toHaveCount(32);
-	const contrast = [];
+	expect(await select.locator('option').evaluateAll(nodes => nodes.map(node => node.value).sort())).toEqual(['auto', ...THEME_NAMES].sort());
+	await expect(select.locator('optgroup')).toHaveCount(2);
+	await expect(page.locator('[data-choose-theme], .appearance-preview, #reading-preview')).toHaveCount(0);
 	for (const name of THEME_NAMES) {
 		await select.selectOption(name);
-		await expect(page.locator('body')).toHaveAttribute('data-theme', name);
-		await expect(page.locator(`[data-choose-theme="${name}"]`)).toHaveAttribute('aria-pressed', 'true');
-		await page.evaluate(() => Promise.all(document.getAnimations()
-			.filter(animation => animation.effect.getComputedTiming().iterations !== Infinity)
-			.map(animation => animation.finished.catch(() => {}))));
-		const shell = await page.locator('body').evaluate(node => ({
-			surface: globalThis.getComputedStyle(node).backgroundColor,
-			text: globalThis.getComputedStyle(node).color,
-			base: globalThis.getComputedStyle(node).getPropertyValue('--color-base-100').trim(),
-		}));
-		expect(shell.base).toBe(themeSpec(name).tokens['--color-base-100']);
-		const samples = await page.evaluate(textContrastSamples, [
-			'body', '.settings-note', '.entry-meta', '#settings-section-description', '[data-settings-section="appearance"]', '#save-reader-settings',
-		]);
-		contrast.push({ theme: name, samples });
-		for (const sample of samples) expect.soft(sample.ratio, `${name}: ${sample.selector}`).toBeGreaterThanOrEqual(4.5);
+		await expect(select).toHaveValue(name);
+		await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
 	}
-	const contrastPath = testInfo.outputPath('theme-contrast.json');
-	await writeFile(contrastPath, JSON.stringify(contrast, null, 2));
-	await testInfo.attach('theme-contrast.json', { path: contrastPath, contentType: 'application/json' });
+	if (!mobile) {
+		expect(await articleColours(page)).toEqual(article);
+		expect(await page.evaluate(() => document.getElementById('article-frame') === globalThis.originalArticleFrame)).toBe(true);
+	}
 	expect(reader.writes).toHaveLength(0);
+	await select.selectOption('nord');
 	await page.locator('#cancel-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
-	await expect(page.locator('#settings-page')).not.toBeVisible();
+	await expect(page.locator('#settings-page')).toBeHidden();
+	await openSettings(page);
+	await expect(select).toHaveValue('nord');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await page.locator('#discard-settings').click();
+	await expect(select).toHaveValue(reader.bootstrap.preferences.theme);
 	expect(reader.writes).toHaveLength(0);
-	if (!mobile) {
-		await expect(page.locator('#article-frame')).toBeVisible();
-		const shell = await page.locator('body').evaluate(node => ({
-			surface: globalThis.getComputedStyle(node).backgroundColor, text: globalThis.getComputedStyle(node).color,
-		}));
-		await expect.poll(() => articleColours(page)).toMatchObject(shell);
-		await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('sunset-reader.png') });
-	}
 });
 
 test('all 32 saved themes match visible article colours and preserve readable article text', async ({ page, reader }, testInfo) => {
@@ -113,11 +101,18 @@ test('all 32 saved themes match visible article colours and preserve readable ar
 		}));
 	});
 	const contrast = [];
+	const settingsContrast = [];
 	for (const name of THEME_NAMES) {
 		await openSettings(page);
 		await page.locator('[name=theme]').selectOption(name);
 		await page.locator('#save-reader-settings').click();
 		await expect(page.locator('#save-reader-settings')).toBeDisabled();
+		await expect(page.locator('body')).toHaveAttribute('data-theme', name);
+		expect(await page.locator('body').evaluate(node => globalThis.getComputedStyle(node).getPropertyValue('--color-base-100').trim()))
+			.toBe(themeSpec(name).tokens['--color-base-100']);
+		const settingsSamples = await page.evaluate(textContrastSamples, ['body', '.setting-help', '#settings-section-description', '#save-reader-settings']);
+		settingsContrast.push({ theme: name, samples: settingsSamples });
+		for (const sample of settingsSamples) expect.soft(sample.ratio, `${name}: ${sample.selector}`).toBeGreaterThanOrEqual(4.5);
 		await page.locator('#cancel-settings').click();
 		await expect(page.locator('#settings-page')).toBeHidden();
 		await page.locator('.entry-card').first().click();
@@ -146,9 +141,12 @@ test('all 32 saved themes match visible article colours and preserve readable ar
 	const path = testInfo.outputPath('article-theme-contrast.json');
 	await writeFile(path, JSON.stringify(contrast, null, 2));
 	await testInfo.attach('article-theme-contrast.json', { path, contentType: 'application/json' });
+	const settingsPath = testInfo.outputPath('theme-contrast.json');
+	await writeFile(settingsPath, JSON.stringify(settingsContrast, null, 2));
+	await testInfo.attach('theme-contrast.json', { path: settingsPath, contentType: 'application/json' });
 });
 
-test('system mode uses its two selected palettes and theme gallery supports keyboard selection', async ({ page, reader }, testInfo) => {
+test('saved system mode follows the system while unsaved theme choices stay in the form', async ({ page, reader }, testInfo) => {
 	await openSettings(page);
 	await page.emulateMedia({ colorScheme: 'light' });
 	await page.locator('[name=theme]').selectOption('auto');
@@ -156,22 +154,25 @@ test('system mode uses its two selected palettes and theme gallery supports keyb
 	await expect(page.locator('[name=darkTheme]')).toBeVisible();
 	await page.locator('[name=lightTheme]').selectOption('cyberpunk');
 	await page.locator('[name=darkTheme]').selectOption('dracula');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'cyberpunk');
 	await page.emulateMedia({ colorScheme: 'dark' });
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
-	await page.locator('.theme-browser > summary').click();
-	await page.locator('.theme-browser > summary').evaluate(node => node.scrollIntoView({ block: 'start' }));
-	await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('themes-gallery.png') });
-	const theme = page.locator('[data-choose-theme=nord]');
-	await theme.focus(); await page.keyboard.press('Enter');
-	await expect(theme).toHaveAttribute('aria-pressed', 'true');
+	const theme = page.locator('[name=theme]');
+	await theme.focus(); await expect(theme).toBeFocused();
+	await theme.selectOption('nord');
 	await expect(page.locator('[name=theme]')).toHaveValue('nord');
 	await expect(page.locator('[name=lightTheme]')).not.toBeVisible();
-	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
+	await page.emulateMedia({ colorScheme: 'light' });
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'cyberpunk');
+	await expect(theme).toHaveValue('nord');
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
-	expect(reader.writes).toHaveLength(1);
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	expect(reader.writes).toHaveLength(2);
 	expect(reader.preferences).toMatchObject({ theme: 'nord', lightTheme: 'cyberpunk', darkTheme: 'dracula' });
 	await page.reload();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
@@ -185,8 +186,52 @@ test('system mode uses its two selected palettes and theme gallery supports keyb
 	await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('nord-reader.png') });
 });
 
-test('export round-trips preview values, legacy imports remain supported, and saved preferences survive reload', async ({ page, reader }) => {
+test('failed theme saves leave the current appearance intact and keep the selected choice for retry', async ({ page, reader }) => {
 	await openSettings(page);
+	await page.locator('[name=theme]').selectOption('nord');
+	const fail = route => route.fulfill({ status: 503, json: { version: 1, error: 'write_failed' } });
+	await page.route('**/i/?c=reader&a=preferences*', fail);
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('#settings-status')).toBeVisible();
+	await expect(page.locator('[name=theme]')).toHaveValue('nord');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await expect(page.locator('#save-reader-settings')).toBeEnabled();
+	await page.unroute('**/i/?c=reader&a=preferences*', fail);
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	expect(reader.preferences.theme).toBe('nord');
+});
+
+test('a delayed save applies its saved theme without overwriting a newer unsaved choice', async ({ page, reader }) => {
+	await openSettings(page);
+	await page.locator('[name=theme]').selectOption('nord');
+	let release;
+	let received;
+	const pending = new Promise(resolve => { release = resolve; });
+	const requestReceived = new Promise(resolve => { received = resolve; });
+	const delay = async route => {
+		const values = route.request().postDataJSON().preferences; received(); await pending;
+		Object.assign(reader.preferences, values);
+		await route.fulfill({ json: { version: 1, schema: reader.bootstrap.schema, preferences: reader.preferences } });
+	};
+	await page.route('**/i/?c=reader&a=preferences*', delay);
+	await page.locator('#save-reader-settings').click(); await requestReceived;
+	await page.locator('[name=theme]').selectOption('dracula');
+	release();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	await expect(page.locator('[name=theme]')).toHaveValue('dracula');
+	await expect(page.locator('#save-reader-settings')).toBeEnabled();
+	await page.unroute('**/i/?c=reader&a=preferences*', delay);
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
+	expect(reader.preferences.theme).toBe('dracula');
+});
+
+test('export round-trips draft values, legacy imports stay unapplied until saved, and preferences survive reload', async ({ page, reader }) => {
+	await openSettings(page);
+	await page.locator('[name=theme]').selectOption('nord');
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
 	await page.locator('[name=theme]').selectOption('dracula');
 	await selectSection(page, 'reading');
 	await page.locator('[name=fontSize]').fill('22');
@@ -196,6 +241,7 @@ test('export round-trips preview values, legacy imports remain supported, and sa
 	const data = JSON.parse(await readFile(await (await downloaded).path(), 'utf8'));
 	expect(data).toMatchObject({ format: 'freshrss-reader', version: 1, preferences: { theme: 'dracula', fontSize: 22 } });
 	await page.locator('#reset-settings').click();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
 	await page.locator('#import-file').setInputFiles({ name: 'reader.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
 	await expect(page.locator('[name=theme]')).toHaveValue('dracula');
 	await expect(page.locator('[name=fontSize]')).toHaveValue('22');
@@ -205,7 +251,9 @@ test('export round-trips preview values, legacy imports remain supported, and sa
 	await expect(page.locator('[name=fontSize]')).toHaveValue('20');
 	await expect(page.locator('[name=lightTheme]')).toHaveValue('nord');
 	await expect(page.locator('[name=darkTheme]')).toHaveValue('sunset');
-	expect(reader.writes).toHaveLength(0);
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	await expect(page.locator('body')).toHaveAttribute('data-style', reader.bootstrap.preferences.style);
+	expect(reader.writes).toHaveLength(1);
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
@@ -215,17 +263,19 @@ test('export round-trips preview values, legacy imports remain supported, and sa
 	await page.locator('#cancel-settings').click();
 	await page.locator('.entry-card').first().click();
 	await expect(page.frameLocator('#article-frame').locator('body')).toHaveCSS('font-size', '20px');
-	expect(reader.writes).toHaveLength(1);
+	expect(reader.writes).toHaveLength(2);
 });
 
-test('appearance preview stays visible and invalid values reveal the field in its settings category', async ({ page, reader }, testInfo) => {
+test('appearance has labelled form controls and invalid values reveal the field in its category', async ({ page, reader }, testInfo) => {
 	await openSettings(page);
 	await expect(page.locator('[data-settings-panel=storage]')).toBeHidden();
 	await expect(page.locator('[name=cacheArticles]')).not.toBeVisible();
-	const preview = await page.locator('.appearance-preview').boundingBox();
+	const theme = await page.locator('[name=theme]').boundingBox();
 	const settings = await page.locator('#settings-page').boundingBox();
-	expect(preview.y).toBeGreaterThanOrEqual(settings.y);
-	expect(preview.y + preview.height).toBeLessThanOrEqual(settings.y + settings.height);
+	expect(theme.y).toBeGreaterThanOrEqual(settings.y);
+	expect(theme.y + theme.height).toBeLessThanOrEqual(settings.y + settings.height);
+	await expect(page.locator('[name=theme]')).toHaveAccessibleName('主题配色');
+	await expect(page.locator('[name=sidebarWidth]')).not.toBeVisible();
 	await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('appearance.png') });
 	await selectSection(page, 'storage');
 	await page.locator('[name=cacheArticles]').fill('');

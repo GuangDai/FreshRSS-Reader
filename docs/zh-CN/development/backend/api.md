@@ -40,7 +40,7 @@ JSON 响应包含 `version: 1`。错误响应包含字符串 `error`，控制器
 | `limits` | POST | 管理员修改 Reader 设置上限，输入 `{limits:{...}}` |
 | `scheduler` | GET | 仅管理员：队列配置、schema、统计和历史；可用 `history_before` 翻页，不可通过此接口启动 worker |
 
-订阅源创建、删除、完整 OPML 导入等操作继续使用已有 GReader API 或经典界面。
+订阅源创建、删除、完整 OPML 导入等操作继续使用已有 GReader API，或通过设置页打开完整管理表单。
 默认分类不能重命名；分类名称冲突、超过分类数量上限返回 409。
 名称按 HTML 编码后的数据库字节长度校验，避免底层静默截断。订阅源 ID 或目标分类不属于当前用户时返回 404。
 

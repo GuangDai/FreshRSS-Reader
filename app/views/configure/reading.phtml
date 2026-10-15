@@ -11,27 +11,6 @@
 		<fieldset>
 			<legend><?= _t('conf.reading.headline.view') ?></legend>
 			<div class="form-group">
-				<label class="group-name" for="view_mode"><?= _t('conf.reading.view.default') ?></label>
-				<div class="group-controls">
-					<select name="view_mode" id="view_mode">
-						<?php
-						/** @var FreshRSS_View $this */
-						/** @var list<FreshRSS_ViewMode>|null $viewModes */
-						$viewModes = isset($this->viewModes) && is_array($this->viewModes) ? $this->viewModes : null;
-						if ($viewModes === null) {
-							$viewModes = FreshRSS_ViewMode::getAllModes();
-						}
-						foreach ($viewModes as $mode):
-						?>
-							<option value="<?= htmlspecialchars($mode->id(), ENT_COMPAT, 'UTF-8') ?>"<?= FreshRSS_Context::userConf()->view_mode === $mode->id() ? ' selected="selected"' : '' ?>>
-								<?= htmlspecialchars($mode->name(), ENT_NOQUOTES, 'UTF-8') ?>
-							</option>
-						<?php endforeach; ?>
-					</select>
-				</div>
-			</div>
-
-			<div class="form-group">
 				<label class="group-name" for="default_view"><?= _t('conf.reading.show') ?></label>
 				<div class="group-controls">
 					<select name="default_view" id="default_view">
@@ -48,7 +27,6 @@
 				<div class="group-controls">
 					<input type="number" id="posts_per_page" name="posts_per_page" value="<?=
 						FreshRSS_Context::userConf()->posts_per_page ?>" min="5" max="500" />
-					<p class="help"><?= _i('help') ?> <?= _t('conf.reading.number_divided_when_reader') ?></p>
 				</div>
 			</div>
 

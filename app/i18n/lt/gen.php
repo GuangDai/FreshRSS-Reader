@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Atnaujinti kanalus',
 		'add' => 'Pridėti',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Grįžti į savo RSS kanalus',
 		'cancel' => 'Atšaukti',
 		'close' => 'Užverti',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Pašalinti',
 		'rename' => 'Pervadinti',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Žiūrėti svetainę',
 		'submit' => 'Pateikti',
 		'truncate' => 'Ištrinti visus straipsnius',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Slaptažodis',
 			'format' => '<small>Bent 7 simboliai</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reikia iš naujo patvirtinti tapatybę',

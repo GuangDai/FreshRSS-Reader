@@ -11,23 +11,9 @@ class FreshRSS_index_Controller extends FreshRSS_ActionController {
 		$this->view->html_url = Minz_Url::display(['c' => 'index', 'a' => 'index'], 'html', 'root');
 	}
 
-	/**
-	 * This action only redirect on the default view mode (normal or global)
-	 */
+	/** The home page always opens the reading interface, independently of legacy view preferences. */
 	public function indexAction(): void {
-		$preferred_output = FreshRSS_Context::userConf()->view_mode;
-		$viewMode = FreshRSS_ViewMode::getAllModes()[$preferred_output] ?? null;
-
-		// Fallback to 'normal' if the preferred mode was not found
-		if ($viewMode === null) {
-			Minz_Request::setBadNotification(_t('feedback.extensions.invalid_view_mode', $preferred_output));
-			$viewMode = FreshRSS_ViewMode::getAllModes()['normal'];
-		}
-
-		Minz_Request::forward([
-			'c' => $viewMode->controller(),
-			'a' => $viewMode->action(),
-		]);
+		Minz_Request::forward(['c' => 'reader', 'a' => 'index']);
 	}
 
 	/**
@@ -98,158 +84,17 @@ class FreshRSS_index_Controller extends FreshRSS_ActionController {
 			]));
 	}
 
-	/**
-	 * This action displays the normal view of FreshRSS.
-	 */
+	/** Retain bookmarked reading URLs while serving the same home interface. */
 	public function normalAction(): void {
-		if (!FreshRSS_Auth::hasAccess() && !FreshRSS_Auth::allowAnonymous()) {
-			if (Minz_Request::paramString('user') !== '') {
-				Minz_Error::error(403, redirect: false);
-			} else {
-				Minz_Request::forward(['c' => 'auth', 'a' => 'login']);
-			}
-			return;
-		}
-
-		$id = Minz_Request::paramInt('id');
-		if ($id !== 0) {
-			if (Minz_Request::paramString('type') === 'tag') {
-				$tagDAO = FreshRSS_Factory::createTagDao();
-				$tag = $tagDAO->searchById($id);
-				$this->view->tag = $tag;
-			} else {
-				$feedDAO = FreshRSS_Factory::createFeedDao();
-				$feed = $feedDAO->searchById($id);
-				$this->view->feed = $feed;
-			}
-			$this->view->displaySlider = true;
-			$this->view->cfrom = Minz_Request::actionName();
-		}
-
-		try {
-			FreshRSS_Context::updateUsingRequest(true);
-		} catch (FreshRSS_Context_Exception $e) {
-			Minz_Error::error(404);
-		}
-
-		$this->_csp([
-			'default-src' => "'self'",
-			'frame-src' => '*',
-			'img-src' => '* data: blob:',
-			'frame-ancestors' => FreshRSS_Context::systemConf()->attributeString('csp.frame-ancestors') ?? "'none'",
-			'media-src' => '*',
-		]);
-
-		$this->view->categories = FreshRSS_Context::categories();
-
-		$this->view->rss_title = FreshRSS_Context::$name . ' | ' . FreshRSS_View::title();
-		$title = FreshRSS_Context::$name;
-		$search = FreshRSS_Context::$search->toString(expandUserQueries: false);
-		if ($search !== '') {
-			$title = '“' . htmlspecialchars($search, ENT_COMPAT, 'UTF-8') . '”';
-		}
-		if (FreshRSS_Context::userConf()->show_title_unread && FreshRSS_Context::$get_unread > 0) {
-			$title = '(' . format_number(FreshRSS_Context::$get_unread) . ') ' . $title;
-		}
-		if (strlen($title) > 0) {
-			FreshRSS_View::prependTitle($title . ' · ');
-		}
-
-		if (FreshRSS_Context::$id_max === '0') {
-			FreshRSS_Context::$id_max = uTimeString();
-		}
-
-		$this->view->callbackBeforeFeeds = static function (FreshRSS_View $view) {
-			$view->nbUnreadTags = 0;
-			if (Minz_Request::paramBoolean('ajax')) {
-				// Disable label counts for AJAX requests: faster and not needed
-				$view->tags = FreshRSS_Context::labels(precounts: false);
-				return;
-			}
-			$view->tags = FreshRSS_Context::labels(precounts: true);
-			foreach ($view->tags as $tag) {
-				$view->nbUnreadTags += $tag->nbUnread();
-			}
-		};
-
-		$this->view->callbackBeforeEntries = static function (FreshRSS_View $view) {
-			try {
-				// +1 to account for paging logic
-				$view->entries = FreshRSS_index_Controller::listEntriesByContext(FreshRSS_Context::$number + 1);
-				if (!$view->entries->valid()) {	// Init the generator to catch potential exceptions
-					$view->entries = new EmptyIterator();
-				}
-				ob_start();	//Buffer "one entry at a time"
-			} catch (FreshRSS_EntriesGetter_Exception $e) {
-				Minz_Log::notice($e->getMessage());
-				Minz_Error::error(404);
-			}
-		};
-
-		$this->view->callbackBeforePagination = static function (?FreshRSS_View $view, int $nbEntries, FreshRSS_Entry $lastEntry) {
-			if ($nbEntries > FreshRSS_Context::$number) {
-				//We have enough entries: we discard the last one to use it for the next articles' page
-				ob_clean();
-				FreshRSS_Context::$continuation_id = $lastEntry->id();
-			} else {
-				FreshRSS_Context::$continuation_id = '0';
-			}
-			ob_end_flush();
-		};
+		$this->indexAction();
 	}
 
-	/**
-	 * This action displays the reader view of FreshRSS.
-	 *
-	 * @todo: change this view into specific CSS rules?
-	 */
 	public function readerAction(): void {
-		$this->normalAction();
+		$this->indexAction();
 	}
 
-	/**
-	 * This action displays the global view of FreshRSS.
-	 */
 	public function globalAction(): void {
-		if (!FreshRSS_Auth::hasAccess() && !FreshRSS_Auth::allowAnonymous()) {
-			if (Minz_Request::paramString('user') !== '') {
-				Minz_Error::error(403, redirect: false);
-			} else {
-				Minz_Request::forward(['c' => 'auth', 'a' => 'login']);
-			}
-			return;
-		}
-
-		FreshRSS_View::appendScript(Minz_Url::display('/scripts/extra.js?' . @filemtime(PUBLIC_PATH . '/scripts/extra.js')));
-		FreshRSS_View::appendScript(Minz_Url::display('/scripts/global_view.js?' . @filemtime(PUBLIC_PATH . '/scripts/global_view.js')));
-
-		try {
-			FreshRSS_Context::updateUsingRequest(true);
-		} catch (FreshRSS_Context_Exception) {
-			Minz_Error::error(404);
-		}
-
-		$this->view->categories = FreshRSS_Context::categories();
-		// Filter feed list when searching or when a restrictive state filter is active
-		if (FreshRSS_Context::$search->toString() !== '' || FreshRSS_Context::isStateConsequential(FreshRSS_Context::$state)) {
-			$entryDAO = FreshRSS_Factory::createEntryDao();
-			$this->view->feedIdsMatching = $entryDAO->listFeedIdsMatching(FreshRSS_Context::$state, FreshRSS_Context::$search);
-		}
-
-		$this->view->rss_title = FreshRSS_Context::$name . ' | ' . FreshRSS_View::title();
-		$title = _t('index.feed.title_global');
-		if (FreshRSS_Context::userConf()->show_title_unread && FreshRSS_Context::$get_unread > 0) {
-			$title = '(' . format_number(FreshRSS_Context::$get_unread) . ') ' . $title;
-		}
-		FreshRSS_View::prependTitle($title . ' · ');
-
-		$this->_csp([
-			'default-src' => "'self'",
-			'frame-src' => '*',
-			'img-src' => '* data: blob:',
-			'frame-ancestors' => FreshRSS_Context::systemConf()->attributeString('csp.frame-ancestors') ?? "'none'",
-			'media-src' => '*',
-		]);
+		$this->indexAction();
 	}
 
 	/**

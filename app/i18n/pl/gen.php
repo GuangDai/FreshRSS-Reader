@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Aktualizuj kanały',
 		'add' => 'Dodaj',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Wróć do subskrypcji',
 		'cancel' => 'Anuluj',
 		'close' => 'Zamknij',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Usuń',
 		'rename' => 'Zmień nazwę',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Przejdź na stronę',
 		'submit' => 'Zatwierdź',
 		'truncate' => 'Usuń wszystkie wiadomości',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Hasło',
 			'format' => '<small>przynajmniej 7 znaków</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Wymagane ponowne logowanie',

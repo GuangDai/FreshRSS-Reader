@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Feeds actualiseren',
 		'add' => 'Toevoegen',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Ga terug naar je RSS feeds',
 		'cancel' => 'Annuleren',
 		'close' => 'Sluiten',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Verwijderen',
 		'rename' => 'Hernoemen',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Bekijk website',
 		'submit' => 'Opslaan',
 		'truncate' => 'Verwijder alle artikelen',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Wachtwoord',
 			'format' => '<small>Ten minste 7 tekens</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Opnieuw aanmelden vereist',

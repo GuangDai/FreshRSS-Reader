@@ -1,11 +1,11 @@
 const SECTIONS = {
-	reading: ['reading', 'navigation', 'media', 'notifications'],
+	reading: ['reading'],
 	filters: ['filters'],
 	storage: ['cleanup', 'storage'],
 	automation: ['refresh'],
 	privacy: ['privacy'],
 };
-const SHARED_READING_FIELDS = ['mark_when.article', 'mark_when.site', 'mark_updated_article_unread'];
+const SHARED_READING_FIELDS = ['default_view', 'mark_when.article', 'mark_when.site', 'mark_updated_article_unread'];
 const SIMPLE_DURATION = /^P(?:(\d+)([YMWD])|T(\d+)(H))$/;
 const ISO_DURATION = /^P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$/;
 
@@ -35,10 +35,8 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		"unit_custom": '自定义 ISO 8601',
 		"durationHelp": '请输入 ISO 8601 周期，例如 P1DT6H（1 天 6 小时）、PT30M（30 分钟）或 PT45S（45 秒）。',
 		"group_reading": '阅读行为',
-		"group_classic_reading": '经典界面的阅读设置',
-		"group_navigation": '经典界面的导航',
-		"group_media": '媒体加载',
-		"group_notifications": '通知',
+		"field_default_view": '打开首页时的文章范围',
+		"help_default_view": '选择未读、未读或收藏、全部；自适应会在没有未读文章时显示全部文章。',
 		"group_filters": '自动标记与过滤',
 		"group_cleanup": '自动回收',
 		"group_storage": 'RSS 输出',
@@ -46,28 +44,12 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		"group_privacy": '隐私',
 		"cleanupNote": '规则用于订阅更新时的自动回收，单个订阅可单独覆盖。保存规则不会立即清理已有文章。',
 		"filterSyntax": '每行一条条件。支持 intitle:关键词、author:作者、intext:正文，以及 OR、括号和 ! 排除；留空可移除这一类过滤。',
-		"field_posts_per_page": '每页文章数',
-		"help_posts_per_page": '经典界面的分页大小；独立阅读界面的分页在上方设置。',
-		"field_default_view": '默认文章范围',
-		"help_default_view": '经典界面打开时使用的文章范围。',
-		"field_auto_load_more": '滚动时加载更多',
-		"help_auto_load_more": '经典界面滚动到底部时加载下一页。',
-		"field_onread_jump_next": '标为已读后跳到下一篇',
-		"help_onread_jump_next": '经典界面手动标为已读后的行为。',
-		"field_auto_remove_article": '隐藏刚读完的文章',
-		"help_auto_remove_article": '经典界面的未读列表即时移除已读文章。',
-		"field_reading_confirm": '批量已读前确认',
-		"help_reading_confirm": '经典界面执行“全部标为已读”前显示确认。',
 		"field_mark_updated_article_unread": '更新的文章重新标为未读',
 		"help_mark_updated_article_unread": '订阅内容更新后，让已读文章重新出现在未读列表。',
 		'field_mark_when.article': '打开文章时标为已读',
 		'help_mark_when.article': '文章成功显示后自动标记；可随时手动改回未读。',
 		'field_mark_when.site': '打开原文时标为已读',
 		'help_mark_when.site': '点击原文链接时自动标记。',
-		'field_mark_when.scroll': '滚动经过文章时标为已读',
-		'help_mark_when.scroll': '经典阅读界面中，文章滚出视野后自动标记。',
-		'field_mark_when.focus': '文章获得焦点时标为已读',
-		'help_mark_when.focus': '经典阅读界面中，选中文章后自动标记。',
 		'field_mark_when.gone': '源中消失的文章标为已读',
 		'help_mark_when.gone': '更新订阅时，已不在 Feed 中的文章自动标记。',
 		'field_mark_when.reception': '新文章直接标为已读',
@@ -80,20 +62,6 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		'help_filters.read': '匹配任意一条条件的新文章自动标为已读。',
 		'field_filters.star': '自动收藏的条件',
 		'help_filters.star': '匹配任意一条条件的新文章自动加入收藏。',
-		"field_hide_read_feeds": '隐藏没有未读文章的订阅',
-		"help_hide_read_feeds": '经典界面的订阅列表只显示仍有未读文章的 Feed。',
-		"field_display_categories": '分类展开方式',
-		"help_display_categories": '设置经典界面侧边栏的分类展开状态。',
-		"field_show_unread_count": '显示未读计数',
-		"help_show_unread_count": '设置经典界面侧边栏的计数显示范围。',
-		"field_show_title_unread": '标签页标题显示未读数',
-		"help_show_title_unread": '经典界面在浏览器标签页标题中显示未读文章数。',
-		"field_show_favicons": '显示网站图标',
-		"help_show_favicons": '控制经典界面订阅列表的网站图标。',
-		"field_icons_as_emojis": '使用表情符号图标',
-		"help_icons_as_emojis": '经典界面用表情符号代替部分界面图标。',
-		"field_lazyload": '延迟加载文章图片',
-		"help_lazyload": '经典界面按需加载图片，减少初始加载流量。',
 		"field_ttl_default": '订阅默认更新间隔',
 		"help_ttl_default": '未单独设置更新间隔的 Feed 使用此值，实际执行由服务器更新任务决定。',
 		"field_dynamic_opml_ttl_default": '动态 OPML 默认更新间隔',
@@ -114,19 +82,11 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		"help_max_posts_per_rss": '账户 RSS 输出的数量上限，独立于数据库保留数量。',
 		"field_since_hours_posts_per_rss": 'RSS 输出时间范围',
 		"help_since_hours_posts_per_rss": 'RSS 只输出最近指定小时的文章；0 表示不按时间限制。',
-		"field_html5_enable_notif": '浏览器通知',
-		"help_html5_enable_notif": '经典界面接收更新通知；还需要浏览器授予通知权限。',
-		"field_html5_notif_timeout": '浏览器通知停留时间',
-		"help_html5_notif_timeout": '0 表示通知持续显示，直到手动关闭。',
-		"field_good_notification_timeout": '成功消息停留时间',
-		"help_good_notification_timeout": '经典界面的成功消息显示时间；0 表示关闭成功消息。',
-		"field_bad_notification_timeout": '错误消息停留时间',
-		"help_bad_notification_timeout": '经典界面的错误消息显示时间。',
 		"field_retrieve_extension_list": '联网获取扩展列表',
 		"help_retrieve_extension_list": '允许 FreshRSS 获取可安装的扩展目录。',
 		"field_send_referrer_allowlist": '允许发送来源网址的域名',
 		"help_send_referrer_allowlist": '每行一个允许的域名或地址；其他原文链接不会发送来源网址。',
-		"option_adaptive": '自动',
+		"option_adaptive": '自适应',
 		"option_unread": '未读',
 		"option_unread_or_favorite": '未读或收藏',
 		"option_all": '全部',
@@ -162,10 +122,8 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		"unit_custom": 'Custom ISO 8601',
 		"durationHelp": 'Enter an ISO 8601 duration, such as P1DT6H (1 day and 6 hours), PT30M (30 minutes), or PT45S (45 seconds).',
 		"group_reading": 'Reading behavior',
-		"group_classic_reading": 'Classic reading settings',
-		"group_navigation": 'Classic navigation',
-		"group_media": 'Media loading',
-		"group_notifications": 'Notifications',
+		"field_default_view": 'Article scope when opening the home page',
+		"help_default_view": 'Choose unread, unread or starred, or all articles. Adaptive shows all articles when none remain unread.',
 		"group_filters": 'Automatic marking and filters',
 		"group_cleanup": 'Automatic cleanup',
 		"group_storage": 'RSS output',
@@ -173,28 +131,12 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		"group_privacy": 'Privacy',
 		"cleanupNote": 'Cleanup runs during feed updates. Individual feeds can override these rules. Saving does not immediately remove existing articles.',
 		"filterSyntax": 'One condition per line. Use intitle:word, author:name, intext:word, OR, parentheses, or ! to exclude. Leave empty to remove these filters.',
-		"field_posts_per_page": 'Articles per page',
-		"help_posts_per_page": 'Page size in the classic interface. The independent reader has its own page size above.',
-		"field_default_view": 'Default article scope',
-		"help_default_view": 'The article scope used when the classic interface opens.',
-		"field_auto_load_more": 'Load more while scrolling',
-		"help_auto_load_more": 'Load the next page at the bottom of the classic interface.',
-		"field_onread_jump_next": 'Move to the next article after marking read',
-		"help_onread_jump_next": 'Applies to manual marking in the classic interface.',
-		"field_auto_remove_article": 'Hide articles just read',
-		"help_auto_remove_article": 'Immediately remove read articles from the classic unread list.',
-		"field_reading_confirm": 'Confirm bulk read actions',
-		"help_reading_confirm": 'Ask before marking all articles read in the classic interface.',
 		"field_mark_updated_article_unread": 'Mark updated articles unread',
 		"help_mark_updated_article_unread": 'Bring previously read articles back to the unread list when their content changes.',
 		'field_mark_when.article': 'Mark articles read when opened',
 		'help_mark_when.article': 'Mark after an article loads successfully. You can still mark it unread manually.',
 		'field_mark_when.site': 'Mark articles read when opening the original',
 		'help_mark_when.site': 'Mark an article read when following its original link.',
-		'field_mark_when.scroll': 'Mark read when scrolling past',
-		'help_mark_when.scroll': 'Mark articles after they scroll out of view in the classic reading interface.',
-		'field_mark_when.focus': 'Mark read when focused',
-		'help_mark_when.focus': 'Mark articles when selected in the classic reading interface.',
 		'field_mark_when.gone': 'Mark articles removed from the feed read',
 		'help_mark_when.gone': 'Automatically mark articles no longer present in the source during feed updates.',
 		'field_mark_when.reception': 'Mark new articles read immediately',
@@ -207,20 +149,6 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		'help_filters.read': 'New articles matching any condition are marked read.',
 		'field_filters.star': 'Conditions for automatically starring',
 		'help_filters.star': 'New articles matching any condition are added to favorites.',
-		"field_hide_read_feeds": 'Hide feeds without unread articles',
-		"help_hide_read_feeds": 'Show only feeds with unread articles in the classic sidebar.',
-		"field_display_categories": 'Category expansion',
-		"help_display_categories": 'Choose how categories expand in the classic sidebar.',
-		"field_show_unread_count": 'Unread counts',
-		"help_show_unread_count": 'Choose where unread counts appear in the classic sidebar.',
-		"field_show_title_unread": 'Unread count in the browser tab',
-		"help_show_title_unread": 'Show the unread count in the classic interface tab title.',
-		"field_show_favicons": 'Show website icons',
-		"help_show_favicons": 'Show favicons in the classic feed list.',
-		"field_icons_as_emojis": 'Use emoji icons',
-		"help_icons_as_emojis": 'Replace some interface icons with emojis in the classic interface.',
-		"field_lazyload": 'Load article images on demand',
-		"help_lazyload": 'Reduce initial traffic by delaying image loading in the classic interface.',
 		"field_ttl_default": 'Default feed update interval',
 		"help_ttl_default": 'Used unless a feed specifies its own interval. The server update task determines when updates run.',
 		"field_dynamic_opml_ttl_default": 'Default dynamic OPML interval',
@@ -241,14 +169,6 @@ export const ACCOUNT_SETTINGS_MESSAGES = {
 		"help_max_posts_per_rss": 'Limits account RSS output, independently of database retention.',
 		"field_since_hours_posts_per_rss": 'RSS output time range',
 		"help_since_hours_posts_per_rss": 'Include articles from this many recent hours. 0 removes the time limit.',
-		"field_html5_enable_notif": 'Browser notifications',
-		"help_html5_enable_notif": 'Update notifications in the classic interface also require browser permission.',
-		"field_html5_notif_timeout": 'Browser notification duration',
-		"help_html5_notif_timeout": '0 keeps the notification open until dismissed.',
-		"field_good_notification_timeout": 'Success message duration',
-		"help_good_notification_timeout": 'Success messages in the classic interface. 0 disables these messages.',
-		"field_bad_notification_timeout": 'Error message duration',
-		"help_bad_notification_timeout": 'Error message duration in the classic interface.',
 		"field_retrieve_extension_list": 'Fetch the extension catalog',
 		"help_retrieve_extension_list": 'Allow FreshRSS to retrieve the available extension list online.',
 		"field_send_referrer_allowlist": 'Domains allowed to receive a referrer',
@@ -302,8 +222,8 @@ export function accountFieldValid(value, spec) {
 
 /** Account settings keep a separate draft for each visible settings category. */
 export class AccountSettings {
-	constructor({ api, bootstrap, root, element, t, onSaved = () => {}, onError = () => {} }) {
-		Object.assign(this, { api, bootstrap, root, element, t, onSaved, onError });
+	constructor({ api, bootstrap, root, element, t, onSaved = () => {}, onError = () => {}, externalActions = false, onDirty = () => {} }) {
+		Object.assign(this, { api, bootstrap, root, element, t, onSaved, onError, externalActions, onDirty });
 		this.fields = new Map(); this.sections = new Map(); this.values = {}; this.epoch = 0;
 		this.onInput = event => this.change(event);
 		this.onSubmit = event => {
@@ -372,23 +292,24 @@ export class AccountSettings {
 
 	build() {
 		for (const [section, state] of this.sections) {
-			const form = this.element('form', 'account-settings-form'); form.dataset.accountSection = section; form.noValidate = true;
+			const form = this.element(this.externalActions ? 'div' : 'form', 'account-settings-form');
+			form.dataset.accountSection = section;
+			if (!this.externalActions) form.noValidate = true;
 			for (const group of SECTIONS[section]) {
-				const entries = Object.entries(this.schema.fields).filter(([, spec]) => spec.group === group);
-				if (!entries.length) continue;
-				if (section === 'reading' && group === 'reading') {
-					const shared = SHARED_READING_FIELDS.flatMap(key => entries.filter(([entry]) => entry === key));
-					const classic = entries.filter(([key]) => !SHARED_READING_FIELDS.includes(key));
-					if (shared.length) form.append(this.buildGroup(group, shared, section));
-					if (classic.length) form.append(this.buildGroup('classic_reading', classic, section, true));
-				} else {
-					form.append(this.buildGroup(group, entries, section, section === 'reading'));
-				}
+				const entries = Object.entries(this.schema.fields).filter(([key, spec]) => spec.group === group &&
+					(section !== 'reading' || SHARED_READING_FIELDS.includes(key)));
+				if (entries.length) form.append(this.buildGroup(group, entries, section));
 			}
-			const actions = this.element('div', 'account-settings-actions');
-			const reset = this.element('button', '', this.text('reset')); reset.type = 'button'; reset.dataset.accountReset = section;
-			const save = this.element('button', 'primary', this.text('save')); save.type = 'submit';
-			actions.append(reset, save, state.status); form.append(actions); state.container.replaceChildren(form);
+			let reset; let save;
+			if (this.externalActions) {
+				form.append(state.status);
+			} else {
+				const actions = this.element('div', 'account-settings-actions');
+				reset = this.element('button', '', this.text('reset')); reset.type = 'button'; reset.dataset.accountReset = section;
+				save = this.element('button', 'primary', this.text('save')); save.type = 'submit';
+				actions.append(reset, save, state.status); form.append(actions);
+			}
+			state.container.replaceChildren(form);
 			Object.assign(state, { form, reset, save });
 		}
 	}
@@ -511,7 +432,7 @@ export class AccountSettings {
 		for (const [key, field] of this.fields) {
 			if (!(key in data.values)) continue;
 			const current = accountFieldValue(field); const clean = field.initial === undefined || equal(current, field.initial);
-			if (clean || (Object.hasOwn(sent, key) && equal(current, sent[key]))) this.setField(field, data.values[key]);
+			if (Object.hasOwn(sent, key) ? equal(current, sent[key]) : clean) this.setField(field, data.values[key]);
 			field.initial = copy(data.values[key], field.spec);
 		}
 		for (const section of this.sections.keys()) this.sync(section);
@@ -531,12 +452,18 @@ export class AccountSettings {
 
 	sync(section) {
 		const state = this.sections.get(section);
-		if (!state?.save) return;
+		if (!state) return;
 		const dirty = this.hasDraft(section);
-		state.save.disabled = !!this.csrfInvalid || state.busy || !dirty;
-		state.save.textContent = this.text(state.busy ? 'saving' : 'save');
-		state.reset.hidden = !dirty; state.reset.disabled = state.busy;
-		state.form.setAttribute('aria-busy', String(state.busy));
+		if (state.save) {
+			state.save.disabled = !!this.csrfInvalid || state.busy || !dirty;
+			state.save.textContent = this.text(state.busy ? 'saving' : 'save');
+		}
+		if (state.reset) { state.reset.hidden = !dirty; state.reset.disabled = state.busy; }
+		state.form?.setAttribute('aria-busy', String(state.busy));
+		this.onDirty(this.hasDraft(), {
+			busy: [...this.sections.values()].some(section => section.busy),
+			invalid: !!this.csrfInvalid,
+		});
 	}
 
 	change(event) {
@@ -565,6 +492,10 @@ export class AccountSettings {
 		state.revision++; state.status.textContent = ''; this.sync(section);
 	}
 
+	resetAll() {
+		for (const section of this.sections.keys()) this.reset(section);
+	}
+
 	invalid(section, keys, message) {
 		const state = this.sections.get(section); state.status.textContent = message;
 		for (const key of keys) {
@@ -583,41 +514,78 @@ export class AccountSettings {
 	failed(error) {
 		if (error?.status === 403) this.csrfInvalid = true;
 		this.onError(error);
-		if (this.csrfInvalid) for (const section of this.sections.keys()) this.sync(section);
+		if (this.csrfInvalid) {
+			for (const [section, state] of this.sections) {
+				state.status.textContent = this.text('csrfError'); this.sync(section);
+			}
+		}
 	}
 
 	async save(section) {
-		const state = this.sections.get(section);
-		if (!state || state.busy || this.csrfInvalid) return;
-		const values = this.changes(section); const keys = Object.keys(values);
-		if (!keys.length) return;
+		return this.saveSections([section]);
+	}
+
+	/** Save every account draft as one atomic patch for the page's shared save action. */
+	async saveAll() {
+		const epoch = this.epoch;
+		if (this.saveTail) await this.saveTail;
+		if (this.epoch !== epoch || this.csrfInvalid) return false;
+		const saved = await this.saveSections([...this.sections.keys()]);
+		return saved && !this.hasDraft();
+	}
+
+	async saveSections(sections) {
+		if (this.csrfInvalid) return false;
+		const states = sections.map(section => ({ section, state: this.sections.get(section) }))
+			.filter(({ section, state }) => state && this.hasDraft(section));
+		if (states.some(({ state }) => state.busy)) return false;
+		if (!states.length) return true;
+		const values = Object.assign({}, ...states.map(({ section }) => this.changes(section)));
+		const keys = Object.keys(values);
 		const invalid = keys.filter(key => !accountFieldValid(values[key], this.fields.get(key).spec));
-		if (invalid.length) { this.invalid(section, invalid, this.text('invalid')); return; }
-		const revision = state.revision; const epoch = this.epoch;
-		const controller = new AbortController(); state.controller = controller; state.busy = true;
-		state.status.textContent = this.text('saving'); this.sync(section);
+		if (invalid.length) {
+			for (const { section } of states) {
+				const errors = invalid.filter(key => this.fields.get(key).section === section);
+				if (errors.length) this.invalid(section, errors, this.text('invalid'));
+			}
+			return false;
+		}
+		const epoch = this.epoch; const controller = new AbortController();
+		for (const entry of states) {
+			entry.revision = entry.state.revision;
+			entry.state.controller = controller; entry.state.busy = true;
+			entry.state.status.textContent = this.text('saving'); this.sync(entry.section);
+		}
 		// Serial writes keep full server snapshots from arriving out of order across categories.
 		const previous = this.saveTail; let release;
 		this.saveTail = new Promise(resolve => { release = resolve; });
 		try {
 			if (previous) await previous;
-			if (this.epoch !== epoch || controller.signal.aborted || this.csrfInvalid) return;
+			if (this.epoch !== epoch || controller.signal.aborted || this.csrfInvalid) return false;
 			const data = await this.api.request('accountSettings', {}, { signal: controller.signal, body: { values } });
-			if (this.epoch !== epoch) return;
+			if (this.epoch !== epoch) return false;
 			if (!data.schema?.fields || !data.values) throw new Error('invalid_response');
 			this.accept(data, values); this.onSaved(data.values, values);
-			state.status.textContent = state.revision === revision ? this.text('saved') : '';
+			for (const { state, revision } of states) state.status.textContent = state.revision === revision ? this.text('saved') : '';
+			return true;
 		} catch (error) {
-			if (this.epoch !== epoch || controller.signal.aborted) return;
+			if (this.epoch !== epoch || controller.signal.aborted) return false;
 			this.failed(error);
-			if (state.revision !== revision) return;
 			const field = error.details?.field || error.details?.details?.field;
 			const errors = Array.isArray(error.fields) ? error.fields : field ? [field] : [];
 			const message = this.text(this.csrfInvalid ? 'csrfError' : error.message === 'invalid_filter' ? 'invalidFilter' : 'saveError');
-			this.invalid(section, errors, message);
+			for (const { section, state, revision } of states) {
+				if (state.revision !== revision) continue;
+				this.invalid(section, errors.filter(key => this.fields.get(key)?.section === section), message);
+			}
+			return false;
 		} finally {
 			release();
-			if (this.epoch === epoch) { state.busy = false; state.controller = null; this.sync(section); }
+			if (this.epoch === epoch) {
+				for (const { section, state } of states) {
+					state.busy = false; state.controller = null; this.sync(section);
+				}
+			}
 		}
 	}
 

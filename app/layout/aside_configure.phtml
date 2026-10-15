@@ -8,7 +8,7 @@
 		<li class="item nav-section">
 			<ul>
 				<li class="item">
-					<a href="<?= _url('index', 'index') ?>"><?= _t('gen.action.back_to_rss_feeds') ?></a>
+					<a href="<?= _url('index', 'index') ?>"><?= _t('gen.action.back_to_reading') ?></a>
 				</li>
 			</ul>
 		</li>
@@ -36,8 +36,6 @@
 				</li>
 				<li class="item<?= Minz_Request::actionName() === 'reading' ? ' active' : '' ?>">
 					<a href="<?= _url('configure', 'reading') ?>"><?= _t('gen.menu.reading') ?></a>
-				</li>
-				<li class="item"><a href="<?= _url('reader', 'index') ?>">FreshRSS Reader</a>
 				</li>
 				<li class="item<?= Minz_Request::actionName() === 'archiving' ? ' active' : '' ?>">
 					<a href="<?= _url('configure', 'archiving') ?>"><?= _t('gen.menu.archiving') ?></a>

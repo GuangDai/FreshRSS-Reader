@@ -135,6 +135,8 @@ export class ReaderStore extends EventTarget {
 		const epoch = ++this.listEpoch;
 		this.listRequest = new AbortController();
 		if (query) {
+			// A deliberate filter choice replaces an inherited legacy state, including when restoring history.
+			if (Object.hasOwn(query, 'filter') && !Object.hasOwn(query, 'state')) delete this.query.state;
 			this.query = { ...this.query, ...query };
 			this.history = [];
 			this.cursor = ''; this.next = null;

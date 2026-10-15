@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Update feeds',
 		'add' => 'Add',
+		'back_to_reading' => 'Back to reading',
 		'back_to_rss_feeds' => '← Go back to your RSS feeds',
 		'cancel' => 'Cancel',
 		'close' => 'Close',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Remove',
 		'rename' => 'Rename',
 		'retry' => 'Retry',
+		'save_changes' => 'Save changes',
 		'see_website' => 'See website',
 		'submit' => 'Submit',
 		'truncate' => 'Delete all articles',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Password',
 			'format' => '<small>At least 7 characters</small>',
+			'show' => 'Show password',
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',

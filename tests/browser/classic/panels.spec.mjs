@@ -4,7 +4,7 @@ const username = process.env.FRESHRSS_TEST_USER;
 const password = process.env.FRESHRSS_TEST_PASSWORD;
 const feedLinks = '.open-slider[href*="a=feed"]';
 const isPanelRequest = url => url.searchParams.get('ajax') === '1' && url.searchParams.get('a') === 'feed';
-let errors;
+let errors = [];
 
 test.beforeEach(async ({ page }) => {
 	test.skip(!username || !password, 'Use an isolated local test account.');

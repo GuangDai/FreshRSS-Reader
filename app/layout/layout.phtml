@@ -6,9 +6,19 @@
 	/** @var FreshRSS_View $this */
 	FreshRSS::preLayout();
 	$readerSettingsEmbed = SettingsEmbedPolicy::active();
+	$readerAccountPage = !$readerSettingsEmbed && Minz_Request::controllerName() === 'auth' &&
+		in_array(Minz_Request::actionName(), ['formLogin', 'register', 'reauth'], true);
+	$readerManagementPage = !$readerSettingsEmbed && !$readerAccountPage && FreshRSS_Auth::hasAccess() &&
+		SettingsEmbedPolicy::allowed(Minz_Request::controllerName(), Minz_Request::actionName());
 	$class = [];
 	if ($readerSettingsEmbed) {
 		$class[] = 'reader-settings-embedded';
+	}
+	if ($readerAccountPage) {
+		$class[] = 'reader-account-page';
+	}
+	if ($readerManagementPage) {
+		$class[] = 'reader-management-page';
 	}
 	if (Minz_Request::controllerName() !== '') {
 		$class[] = 'controller_' . Minz_Request::controllerName();
@@ -42,8 +52,11 @@
 <?php $this->renderHelper('javascript_vars'); ?>
 		</script>
 		<?= FreshRSS_View::headScript() ?>
-<?php if ($readerSettingsEmbed) { ?>
+<?php if ($readerAccountPage) { ?>
+		<link rel="stylesheet" href="<?= Minz_Url::display('/styles/reader/account.css?' . @filemtime(PUBLIC_PATH . '/styles/reader/account.css')) ?>" />
+<?php } if ($readerSettingsEmbed || $readerManagementPage) { ?>
 		<link rel="stylesheet" href="<?= Minz_Url::display('/styles/reader/settings-embed.css?' . @filemtime(PUBLIC_PATH . '/styles/reader/settings-embed.css')) ?>" />
+<?php } if ($readerSettingsEmbed) { ?>
 		<script id="reader-settings-embed-config" type="application/json"><?= json_encode([
 			'pages' => SettingsEmbedPolicy::pageRoutes(),
 			'submits' => SettingsEmbedPolicy::submitRoutes(),
@@ -99,9 +112,21 @@
 	</head>
 	<body class="<?= Minz_Request::actionName() ?>">
 <?php
-	if (!$readerSettingsEmbed && !Minz_Request::paramBoolean('ajax')) {
+	if (!$readerSettingsEmbed && !$readerAccountPage && !Minz_Request::paramBoolean('ajax')) {
 		flush();
-		$this->partial('header');
+		if ($readerManagementPage) {
+?>
+<header class="reader-management-header">
+	<a class="reader-management-brand" href="<?= _url('index', 'index') ?>">FreshRSS</a>
+	<nav aria-label="<?= _t('gen.menu.configuration') ?>">
+		<a href="<?= Minz_Url::display(['c' => 'index', 'a' => 'index', 'params' => ['view' => 'settings']]) ?>"><?= _t('gen.menu.configuration') ?></a>
+		<a class="reader-management-return" href="<?= _url('index', 'index') ?>"><?= _t('gen.action.back_to_reading') ?></a>
+	</nav>
+</header>
+<?php
+		} else {
+			$this->partial('header');
+		}
 	}
 ?>
 

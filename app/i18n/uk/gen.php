@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Оновити стрічки',
 		'add' => 'Додати',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Повернутися до RSS-стрічок',
 		'cancel' => 'Скасувати',
 		'close' => 'Закрити',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Вилучити',
 		'rename' => 'Перейменувати',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Переглянути вебсайт',
 		'submit' => 'Надіслати',
 		'truncate' => 'Видалити всі статті',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Пароль',
 			'format' => '<small>Принаймні 7 символів</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Слід перезайти',

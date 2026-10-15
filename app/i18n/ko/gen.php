@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => '새 글 가져오기',
 		'add' => '추가',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← RSS 피드로 돌아가기',
 		'cancel' => '취소',
 		'close' => 'Close',	// TODO
@@ -48,6 +49,7 @@ return array(
 		'remove' => '삭제',
 		'rename' => '이름 바꾸기',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => '웹사이트 열기',
 		'submit' => '설정 저장',
 		'truncate' => '모든 글 삭제',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => '암호',
 			'format' => '<small>7 글자 이상이어야 합니다</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// TODO

@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Atualizar feeds',
 		'add' => 'Adicionar',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Volte para o seu feeds RSS',
 		'cancel' => 'Cancelar',
 		'close' => 'Close',	// TODO
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Remover',
 		'rename' => 'Renomear',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Ver o site',
 		'submit' => 'Enviar',
 		'truncate' => 'Apagar todos os artigos',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Senha',
 			'format' => '<small>Pelo menos 7 caracteres</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// TODO

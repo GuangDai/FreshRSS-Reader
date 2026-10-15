@@ -233,16 +233,16 @@ test('viewing matching articles opens the original results in a separate window'
 	await expect(preview).not.toHaveAttribute('formaction', /readerSettings/);
 });
 
-test('returning to Reader after an embedded POST clears the settings URL and restores reading', async ({ page }) => {
-	await page.goto('./?c=reader');
+test('returning home after an embedded POST clears the settings URL and restores reading', async ({ page }) => {
+	await page.goto('./');
 	await page.locator('#open-settings').click();
-	const section = page.locator('[data-settings-section="reading"]');
+	const section = page.locator('[data-settings-section="appearance"]');
 	if (await section.isVisible()) await section.click();
-	else await page.locator('#settings-section-select').selectOption('reading');
-	await page.locator('[data-tool-id="shortcuts"]').click();
+	else await page.locator('#settings-section-select').selectOption('appearance');
+	await page.locator('[data-tool-id="language-timezone"]').click();
 	const frame = page.frameLocator('#settings-tool-frame');
 	await expect(frame.locator('html')).toHaveClass(/reader-settings-embedded/);
-	const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).searchParams.get('a') === 'shortcut');
+	const response = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).searchParams.get('a') === 'display');
 	await frame.locator('button[type=submit]').first().click();
 	expect((await response).status()).toBeLessThan(400);
 	await expect(page.locator('#settings-tool-status')).toBeHidden();

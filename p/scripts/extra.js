@@ -126,6 +126,7 @@ function showPW(btn) {
 	const passwordField = btn.previousElementSibling;
 	passwordField.setAttribute('type', 'text');
 	btn.classList.add('active');
+	btn.setAttribute('aria-pressed', 'true');
 	clearTimeout(btn.timeoutHide);
 	btn.timeoutHide = setTimeout(function () { hidePW(btn); }, 5000);
 	return false;
@@ -136,6 +137,7 @@ function hidePW(btn) {
 	const passwordField = btn.previousElementSibling;
 	passwordField.setAttribute('type', 'password');
 	passwordField.nextElementSibling.classList.remove('active');
+	btn.setAttribute('aria-pressed', 'false');
 	return false;
 }
 

@@ -305,3 +305,21 @@ test('CSRF expiry preserves account data but prevents further state writes', asy
 	assert.equal(requests.length, 0);
 	assert.equal(store.items.length, 1); assert.equal(store.feeds.length, 1); assert.equal(store.article.id, '1');
 });
+
+test('an inherited reading state survives paging and searching until the user chooses a filter', async () => {
+	const { store, requests } = fixture();
+	const inherited = store.list({ get: 'T', filter: 'all', search: '', state: 96 });
+	assert.equal(requests[0].params.state, 96);
+	requests[0].resolve({ items: [item('4')], next: '4' }); await inherited;
+	const next = store.nextPage();
+	assert.equal(requests[1].params.state, 96);
+	requests[1].resolve({ items: [], next: null }); await next;
+	const search = store.list({ search: 'RSS' });
+	assert.equal(requests[2].params.state, 96);
+	requests[2].resolve({ items: [], next: null }); await search;
+	const filter = store.list({ filter: 'unread' });
+	assert.equal(Object.hasOwn(requests[3].params, 'state'), false);
+	assert.equal(requests[3].params.filter, 'unread');
+	requests[3].resolve({ items: [], next: null }); await filter;
+	assert.deepEqual(store.query, { get: 'T', filter: 'unread', search: 'RSS' });
+});

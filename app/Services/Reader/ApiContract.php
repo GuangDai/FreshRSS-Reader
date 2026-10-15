@@ -12,8 +12,9 @@ use FreshRSS_Entry;
 /** Machine-readable reader routes and schemas. Limits come from the same configuration used by request validation. */
 final class ApiContract {
 	public const VERSION = 1;
-	public const STREAM_PATTERN = '^([fc])_([1-9][0-9]{0,9})$';
-	public const STREAMS = ['a', 'A', 's', 'i'];
+	public const PUBLIC_READ_ACTIONS = ['index', 'capabilities', 'schema', 'feeds', 'items', 'article'];
+	public const STREAM_PATTERN = '^([fct])_([1-9][0-9]{0,9})$';
+	public const STREAMS = ['a', 'A', 's', 'i', 'T', 'Z'];
 	public const FILTERS = ['all' => FreshRSS_Entry::STATE_ALL, 'unread' => FreshRSS_Entry::STATE_NOT_READ, 'starred' => FreshRSS_Entry::STATE_FAVORITE];
 
 	/** This table also enforces methods in the controller.
@@ -38,7 +39,7 @@ final class ApiContract {
 
 	/** @param array<string,mixed> $params
 	 * @param array<string,int> $readerLimits
-	 * @return array{type:'a'|'A'|'s'|'i'|'f'|'c',id:int,state:int,idMax:numeric-string,limit:int,search:string,exhausted:bool}
+	 * @return array{type:'a'|'A'|'s'|'i'|'f'|'c'|'t'|'T'|'Z',id:int,state:int,idMax:numeric-string,limit:int,search:string,exhausted:bool}
 	 * @throws ApiException
 	 */
 	public static function listing(array $params, array $readerLimits): array {
@@ -64,6 +65,15 @@ final class ApiContract {
 		if (!is_string($filter) || !isset(self::FILTERS[$filter])) {
 			throw new ApiException('invalid_filter');
 		}
+		$state = self::FILTERS[$filter];
+		if (array_key_exists('state', $params)) {
+			$requestedState = $params['state'];
+			$state = is_int($requestedState) || is_string($requestedState)
+				? filter_var($requestedState, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) : false;
+			if ($state === false || ($state & ~(FreshRSS_Entry::STATE_ANDS | FreshRSS_Entry::STATE_ORS)) !== 0) {
+				throw new ApiException('invalid_state');
+			}
+		}
 		$cursor = $params['cursor'] ?? '';
 		if (!is_string($cursor) || ($cursor !== '' && EntryPresenter::entryId($cursor) === null)) {
 			throw new ApiException('invalid_cursor');
@@ -84,7 +94,7 @@ final class ApiContract {
 		}
 		/** @var numeric-string $idMax */
 		$idMax = $cursor === '' ? '0' : gmp_strval(gmp_sub($cursor, 1));
-		return ['type' => $type, 'id' => $id, 'state' => self::FILTERS[$filter], 'idMax' => $idMax,
+		return ['type' => $type, 'id' => $id, 'state' => $state, 'idMax' => $idMax,
 			'limit' => $limit, 'search' => $search, 'exhausted' => $cursor === '1'];
 	}
 
@@ -109,7 +119,7 @@ final class ApiContract {
 	 * @param array{maxBatchItems:int,maxRequestBytes:int} $apiLimits
 	 * @return array<string,mixed>
 	 */
-	public static function contract(array $readerLimits, array $apiLimits): array {
+	public static function contract(array $readerLimits, array $apiLimits, bool $readOnly = false): array {
 		$preferences = Preferences::schema($readerLimits);
 		$entryId = self::entryIdSchema();
 		$integerId = ['type' => 'integer', 'minimum' => 1];
@@ -190,6 +200,8 @@ final class ApiContract {
 			'items' => ['GET' => self::object([
 				'get' => ['anyOf' => [['enum' => self::STREAMS], ['type' => 'string', 'pattern' => self::STREAM_PATTERN]], 'default' => 'a'],
 				'filter' => ['enum' => array_keys(self::FILTERS), 'default' => 'all'],
+				'state' => ['type' => 'integer', 'minimum' => 1,
+					'maximum' => FreshRSS_Entry::STATE_ANDS | FreshRSS_Entry::STATE_ORS, 'description' => 'Legacy reading state bitmask'],
 				'cursor' => ['anyOf' => [$entryId, ['const' => '']]],
 				'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => min(PHP_INT_MAX - 1, $preferences['pageSize']['max'] ?? 1),
 					'default' => $preferences['pageSize']['default']],
@@ -295,9 +307,17 @@ final class ApiContract {
 				'backups' => self::object(['sqliteAvailable' => $boolean, 'bytes' => ['type' => 'integer', 'minimum' => 0],
 					'archives' => ['type' => 'array', 'items' => $archive]], ['sqliteAvailable', 'bytes', 'archives'])],
 		];
+		if ($readOnly) {
+			$responses['capabilities'] = ['api' => ['const' => 'freshrss-reader'], 'authentication' => ['const' => 'anonymous'],
+				'readOnly' => ['const' => true], 'limits' => ['type' => 'object'], 'pagination' => ['type' => 'object'],
+				'capabilities' => ['type' => 'array', 'items' => ['enum' => array_values(array_diff(self::PUBLIC_READ_ACTIONS, ['index']))]],
+				'features' => ['type' => 'object']];
+			$responses['schema'] = ['readOnly' => ['const' => true], 'limits' => ['type' => 'object'],
+				'entryId' => ['type' => 'object'], 'contract' => ['type' => 'object']];
+		}
 		$endpoints = [];
 		foreach (self::routes() as $action => $methods) {
-			if ($action === 'index') {
+			if ($action === 'index' || ($readOnly && !in_array($action, self::PUBLIC_READ_ACTIONS, true))) {
 				continue;
 			}
 			$operations = [];
@@ -315,15 +335,18 @@ final class ApiContract {
 			$endpoints[$action] = ['url' => '?c=reader&a=' . $action, 'methods' => $methods,
 				'administrator' => in_array($action, ['scheduler', 'limits', 'backupPolicy'], true), 'operations' => $operations];
 		}
-		$singleExtension = self::object(['version' => ['const' => self::VERSION], 'configuration' => $extensionDescription], ['version', 'configuration']);
-		$endpoints['extensionConfig']['operations']['GET']['response'] = ['oneOf' => [$singleExtension,
-			self::object(['version' => ['const' => self::VERSION], 'configurations' => ['type' => 'array', 'items' => $extensionDescription]],
-				['version', 'configurations'])]];
-		$endpoints['extensionConfig']['operations']['POST']['response'] = $singleExtension;
-		$endpoints['export']['operations']['GET']['response'] = ['type' => 'string'];
-		$endpoints['export']['contentType'] = 'text/x-opml; charset=UTF-8';
+		if (!$readOnly) {
+			$singleExtension = self::object(['version' => ['const' => self::VERSION], 'configuration' => $extensionDescription], ['version', 'configuration']);
+			$endpoints['extensionConfig']['operations']['GET']['response'] = ['oneOf' => [$singleExtension,
+				self::object(['version' => ['const' => self::VERSION], 'configurations' => ['type' => 'array', 'items' => $extensionDescription]],
+					['version', 'configurations'])]];
+			$endpoints['extensionConfig']['operations']['POST']['response'] = $singleExtension;
+			$endpoints['export']['operations']['GET']['response'] = ['type' => 'string'];
+			$endpoints['export']['contentType'] = 'text/x-opml; charset=UTF-8';
+		}
 		return ['format' => 'freshrss-reader-contract', 'version' => self::VERSION, 'schemaDialect' => 'https://json-schema.org/draft/2020-12/schema',
-			'authentication' => ['type' => 'session', 'csrfBodyField' => '_csrf', 'csrfMethods' => ['POST']],
+			'authentication' => ['type' => $readOnly ? 'anonymous' : 'session',
+				'csrfBodyField' => $readOnly ? null : '_csrf', 'csrfMethods' => $readOnly ? [] : ['POST']],
 			'limits' => $apiLimits, 'endpoints' => $endpoints,
 			'error' => self::object(['version' => ['const' => self::VERSION], 'error' => ['type' => 'string'],
 				'errorDetails' => self::object(['code' => ['type' => 'string'], 'status' => ['type' => 'integer']], ['code', 'status'])], ['version', 'error']),

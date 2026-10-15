@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Update feeds',	// IGNORE
 		'add' => 'Add',	// IGNORE
+		'back_to_reading' => 'Back to reading',	// IGNORE
 		'back_to_rss_feeds' => '← Go back to your RSS feeds',	// IGNORE
 		'cancel' => 'Cancel',	// IGNORE
 		'close' => 'Close',	// IGNORE
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Remove',	// IGNORE
 		'rename' => 'Rename',	// IGNORE
 		'retry' => 'Retry',	// IGNORE
+		'save_changes' => 'Save changes',	// IGNORE
 		'see_website' => 'See website',	// IGNORE
 		'submit' => 'Submit',	// IGNORE
 		'truncate' => 'Delete all articles',	// IGNORE
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Password',	// IGNORE
 			'format' => '<small>At least 7 characters</small>',	// IGNORE
+			'show' => 'Show password',	// IGNORE
 		),
 		'reauth' => array(
 			'header' => 'Reauthentication is required',	// IGNORE

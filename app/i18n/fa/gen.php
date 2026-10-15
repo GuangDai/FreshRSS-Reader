@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => ' فیدها را به روز کنید',
 		'add' => ' اضافه کنید',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← به فیدهای RSS خود برگردید',
 		'cancel' => ' لغو',
 		'close' => 'بستن',
@@ -48,6 +49,7 @@ return array(
 		'remove' => ' حذف کنید',
 		'rename' => ' تغییر نام',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'به وب‌سایت مراجعه کنید',
 		'submit' => ' ارسال کنید',
 		'truncate' => ' تمام مقالات را حذف کنید',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => ' رمز عبور',
 			'format' => '<small>حداقل 7 نویسه</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'احراز هویت مجدد لازم است',

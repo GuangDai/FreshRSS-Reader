@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Lentləri yenilə',
 		'add' => 'Əlavə et',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← RSS lentlərinizə qayıdın',
 		'cancel' => 'Ləğv et',
 		'close' => 'Bağla',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Çıxar',
 		'rename' => 'Adını dəyiş',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Veb sayta bax',
 		'submit' => 'Göndər',
 		'truncate' => 'Bütün məqalələri sil',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Parol',
 			'format' => '<small>Ən azı 7 simvol</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Yenidən kimlik doğrulama tələb olunur',

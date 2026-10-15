@@ -25,27 +25,9 @@ class FreshRSS_configure_Controller extends FreshRSS_ActionController {
 	 * configuration values then sends a notification to the user.
 	 *
 	 * The options available on the page are:
-	 *   - language (default: en)
-	 *   - theme (default: Origin)
-	 *   - darkMode (default: auto)
-	 *   - content width (default: thin)
-	 *   - display of read action in header
-	 *   - display of favorite action in header
-	 *   - display of date in header
-	 *   - display of open action in header
-	 *   - display of read action in footer
-	 *   - display of favorite action in footer
-	 *   - display of sharing action in footer
-	 *   - display of article tags in footer
-	 *   - display of my Labels in footer
-	 *   - display of date in footer
-	 *   - display of open action in footer
-	 *   - display of feed title (default: above title)
-	 *   - display of authors and date (default: none)
-	 *   - display of article icons position (default: above title)
-	 *   - display of tags (default: none)
-	 *   - html5 notification timeout (default: 0)
-	 * Default values are false unless specified.
+	 *   - interface language
+	 *   - time zone
+	 *   - success and error notification durations
 	 */
 	public function displayAction(): void {
 		if (Minz_Request::isPost()) {
@@ -54,43 +36,6 @@ class FreshRSS_configure_Controller extends FreshRSS_ActionController {
 				FreshRSS_Context::userConf()->language = $language;
 			}
 			FreshRSS_Context::userConf()->timezone = Minz_Request::paramString('timezone');
-			$theme = Minz_Request::paramString('theme') ?: FreshRSS_Themes::$defaultTheme;
-			if (FreshRSS_Themes::exists($theme)) {
-				FreshRSS_Context::userConf()->theme = $theme;
-			}
-			FreshRSS_Context::userConf()->darkMode = Minz_Request::paramString('darkMode') ?: 'auto';
-			FreshRSS_Context::userConf()->content_width = Minz_Request::paramString('content_width') ?: 'thin';
-			FreshRSS_Context::userConf()->topline_read = Minz_Request::paramBoolean('topline_read');
-			FreshRSS_Context::userConf()->topline_favorite = Minz_Request::paramBoolean('topline_favorite');
-			FreshRSS_Context::userConf()->topline_myLabels = Minz_Request::paramBoolean('topline_myLabels');
-			FreshRSS_Context::userConf()->topline_sharing = Minz_Request::paramBoolean('topline_sharing');
-			FreshRSS_Context::userConf()->topline_date = Minz_Request::paramBoolean('topline_date');
-			FreshRSS_Context::userConf()->topline_link = Minz_Request::paramBoolean('topline_link');
-			FreshRSS_Context::userConf()->topline_website = Minz_Request::paramString('topline_website');
-			FreshRSS_Context::userConf()->topline_thumbnail = Minz_Request::paramString('topline_thumbnail');
-			FreshRSS_Context::userConf()->topline_summary = Minz_Request::paramBoolean('topline_summary');
-			FreshRSS_Context::userConf()->topline_display_authors = Minz_Request::paramBoolean('topline_display_authors');
-			FreshRSS_Context::userConf()->show_tags = Minz_Request::paramStringNull('show_tags') ?? '0';
-			FreshRSS_Context::userConf()->show_tags_max = Minz_Request::paramInt('show_tags_max');
-			FreshRSS_Context::userConf()->show_author_date = Minz_Request::paramStringNull('show_author_date') ?? '0';
-			FreshRSS_Context::userConf()->show_feed_name = Minz_Request::paramStringNull('show_feed_name') ?? 't';
-			FreshRSS_Context::userConf()->show_article_icons = Minz_Request::paramStringNull('show_article_icons') ?? 't';
-			FreshRSS_Context::userConf()->bottomline_read = Minz_Request::paramBoolean('bottomline_read');
-			FreshRSS_Context::userConf()->bottomline_favorite = Minz_Request::paramBoolean('bottomline_favorite');
-			FreshRSS_Context::userConf()->bottomline_sharing = Minz_Request::paramBoolean('bottomline_sharing');
-			FreshRSS_Context::userConf()->bottomline_tags = Minz_Request::paramBoolean('bottomline_tags');
-			FreshRSS_Context::userConf()->bottomline_myLabels = Minz_Request::paramBoolean('bottomline_myLabels');
-			FreshRSS_Context::userConf()->bottomline_date = Minz_Request::paramBoolean('bottomline_date');
-			FreshRSS_Context::userConf()->bottomline_link = Minz_Request::paramBoolean('bottomline_link');
-			FreshRSS_Context::userConf()->show_nav_buttons = Minz_Request::paramBoolean('show_nav_buttons');
-			FreshRSS_Context::userConf()->show_title_unread = Minz_Request::paramBoolean('show_title_unread');
-			$showUnreadCount = Minz_Request::paramString('show_unread_count');
-			if (in_array($showUnreadCount, ['all', 'important', 'none'], true)) {
-				FreshRSS_Context::userConf()->show_unread_count = $showUnreadCount;
-			}
-			FreshRSS_Context::userConf()->sidebar_hidden_by_default = Minz_Request::paramBoolean('sidebar_hidden_by_default');
-			FreshRSS_Context::userConf()->html5_notif_timeout = max(0, Minz_Request::paramInt('html5_notif_timeout'));
-			FreshRSS_Context::userConf()->html5_enable_notif = Minz_Request::paramBoolean('html5_enable_notif');
 			FreshRSS_Context::userConf()->good_notification_timeout = max(0, Minz_Request::paramInt('good_notification_timeout'));
 			FreshRSS_Context::userConf()->bad_notification_timeout = max(1, Minz_Request::paramInt('bad_notification_timeout'));
 			FreshRSS_Context::userConf()->save();
@@ -106,8 +51,6 @@ class FreshRSS_configure_Controller extends FreshRSS_ActionController {
 				showNotification: FreshRSS_Context::userConf()->good_notification_timeout > 0);
 		}
 
-		$this->view->themes = FreshRSS_Themes::get();
-
 		FreshRSS_View::prependTitle(_t('conf.display.title') . ' · ');
 	}
 
@@ -120,7 +63,6 @@ class FreshRSS_configure_Controller extends FreshRSS_ActionController {
 	 *
 	 * The options available on the page are:
 	 *   - number of posts per page (default: 10)
-	 *   - view mode (default: normal)
 	 *   - default article view (default: all)
 	 *   - load automatically articles
 	 *   - display expanded articles
@@ -143,7 +85,6 @@ class FreshRSS_configure_Controller extends FreshRSS_ActionController {
 	public function readingAction(): void {
 		if (Minz_Request::isPost()) {
 			FreshRSS_Context::userConf()->posts_per_page = Minz_Request::paramInt('posts_per_page') ?: 10;
-			FreshRSS_Context::userConf()->view_mode = Minz_Request::paramStringNull('view_mode', true) ?? 'normal';
 			FreshRSS_Context::userConf()->default_view = Minz_Request::paramStringNull('default_view') ?? 'adaptive';
 			FreshRSS_Context::userConf()->show_fav_unread = Minz_Request::paramBoolean('show_fav_unread');
 			FreshRSS_Context::userConf()->auto_load_more = Minz_Request::paramBoolean('auto_load_more');
@@ -216,7 +157,6 @@ class FreshRSS_configure_Controller extends FreshRSS_ActionController {
 			);
 		}
 
-		$this->view->viewModes = FreshRSS_ViewMode::getAllModes();
 		FreshRSS_View::prependTitle(_t('conf.reading.title') . ' · ');
 	}
 

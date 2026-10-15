@@ -1,10 +1,14 @@
 const stateKey = 'freshrssReader';
+const readingStateMask = 111;
 const panels = new Set(['sidebar', 'appearance', 'feed-settings', 'settings']);
 const settingsSections = new Set([
 	'appearance', 'reading', 'subscriptions', 'filters', 'feeds', 'data', 'storage', 'privacy', 'extensions', 'automation', 'advanced',
 ]);
 
 function settingsSection(value) { return settingsSections.has(value) ? value : 'appearance'; }
+function validReadingState(value) {
+	return Number.isInteger(value) && value > 0 && value <= readingStateMask && (value & ~readingStateMask) === 0;
+}
 
 function snapshot(value = {}) {
 	const query = value.query || {};
@@ -13,6 +17,7 @@ function snapshot(value = {}) {
 			get: typeof query.get === 'string' ? query.get : 'a',
 			filter: typeof query.filter === 'string' ? query.filter : 'all',
 			search: typeof query.search === 'string' ? query.search : '',
+			...(validReadingState(query.state) ? { state: query.state } : {}),
 		},
 		cursor: typeof value.cursor === 'string' ? value.cursor : '',
 		history: Array.isArray(value.history) ? value.history.filter(cursor => typeof cursor === 'string') : [],
@@ -50,12 +55,23 @@ export class ReaderNavigation {
 		const existing = this.read(this.history.state);
 		if (existing) {
 			this.current = existing;
+			this.write(existing, false);
 			return snapshot(existing.snapshot);
 		}
 		const value = snapshot(initial);
 		const params = new URL(this.location.href).searchParams;
 		for (const key of ['get', 'filter', 'search']) {
 			if (params.has(key)) value.query[key] = params.get(key);
+		}
+		if (params.has('filter')) delete value.query.state;
+		else if (params.has('state')) {
+			const state = Number(params.get('state'));
+			if (validReadingState(state)) {
+				const filter = { 2: 'unread', 3: 'all', 4: 'starred' }[state];
+				if (filter) {
+					value.query.filter = filter; delete value.query.state;
+				} else value.query.state = state;
+			}
 		}
 		if (params.has('cursor')) { value.cursor = params.get('cursor'); value.history = []; }
 		const id = params.get('article');
@@ -83,9 +99,15 @@ export class ReaderNavigation {
 	write(value, push) {
 		const url = new URL(this.location.href);
 		const data = value.snapshot;
-		for (const [key, text] of Object.entries({ ...data.query, cursor: data.cursor, article: data.selectedId })) {
-			if (text && !(key === 'get' && text === 'a') && !(key === 'filter' && text === 'all')) url.searchParams.set(key, text);
-			else url.searchParams.delete(key);
+		const explicitAll = !data.query.state && (url.searchParams.has('filter') || url.searchParams.has('state'));
+		if ([null, 'index', 'reader'].includes(url.searchParams.get('c')) &&
+			[null, 'index', 'normal', 'reader', 'global'].includes(url.searchParams.get('a'))) {
+			url.searchParams.delete('c'); url.searchParams.delete('a');
+		}
+		for (const [key, text] of Object.entries({ ...data.query, state: data.query.state, cursor: data.cursor, article: data.selectedId })) {
+			if (text && !(key === 'get' && text === 'a') && !(key === 'filter' && text === 'all' && !explicitAll)) {
+				url.searchParams.set(key, String(text));
+			} else url.searchParams.delete(key);
 		}
 		if (value.panels.includes('settings')) {
 			url.searchParams.set('view', 'settings');

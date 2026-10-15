@@ -29,8 +29,8 @@ function field(type, initial, section = 'reading', spec = {}) {
 	return value;
 }
 
-function editor(fields, api = { request: async () => { throw new Error('unexpected_request'); } }) {
-	const ui = new AccountSettings({ api, bootstrap: { lang: 'zh-CN' }, root: { removeEventListener() {} } });
+function editor(fields, api = { request: async () => { throw new Error('unexpected_request'); } }, options = {}) {
+	const ui = new AccountSettings({ api, bootstrap: { lang: 'zh-CN' }, root: { removeEventListener() {} }, ...options });
 	ui.fields = new Map(Object.entries(fields));
 	ui.schema = { fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.spec])) };
 	for (const section of new Set(Object.values(fields).map(value => value.section))) {
@@ -363,4 +363,133 @@ test('disposing during a save aborts the request and prevents a late response fr
 	await saving;
 	assert.equal(article.initial, true);
 	assert.equal(ui.hasDraft(), true);
+});
+
+test('the shared save action submits all account drafts atomically and reports its busy and dirty state', async () => {
+	const request = deferred(); const updates = []; const calls = [];
+	const article = field('boolean', true); const maximum = field('integer_or_false', 200, 'storage', { min: 0 });
+	const ui = editor({ 'mark_when.article': article, 'archiving.keep_max': maximum }, {
+		request: (action, params, options) => { calls.push(options.body.values); return request.promise; },
+	}, { externalActions: true, onDirty: (dirty, state) => updates.push({ dirty, ...state }) });
+	for (const section of ui.sections.values()) { section.save = undefined; section.reset = undefined; }
+	article.input.checked = false; maximum.input.value = '300';
+	ui.sync('reading');
+	assert.deepEqual(updates.at(-1), { dirty: true, busy: false, invalid: false });
+	const saving = ui.saveAll();
+	assert.deepEqual(calls, [{ 'mark_when.article': false, 'archiving.keep_max': 300 }]);
+	assert.deepEqual(updates.at(-1), { dirty: true, busy: true, invalid: false });
+	request.resolve({ schema: ui.schema, values: { 'mark_when.article': false, 'archiving.keep_max': 300 } });
+	assert.equal(await saving, true);
+	assert.deepEqual(updates.at(-1), { dirty: false, busy: false, invalid: false });
+	assert.equal(ui.sections.get('storage').status.textContent, '已保存');
+});
+
+test('global account validation prevents every category from being partially saved', async () => {
+	const article = field('boolean', true); const maximum = field('integer_or_false', 200, 'storage', { min: 0 });
+	let requests = 0;
+	const ui = editor({ 'mark_when.article': article, 'archiving.keep_max': maximum }, {
+		request: async () => { requests++; },
+	});
+	article.input.checked = false; maximum.input.value = '-1';
+	assert.equal(await ui.saveAll(), false);
+	assert.equal(requests, 0);
+	assert.equal(article.initial, true);
+	assert.equal(maximum.input.attributes['aria-invalid'], 'true');
+	ui.resetAll();
+	assert.equal(ui.hasDraft(), false);
+	assert.equal(article.input.checked, true);
+	assert.equal(maximum.input.value, '200');
+});
+
+test('global account saves retain a draft edited during the request and report that more changes remain', async () => {
+	const result = deferred(); const filter = field('string_list', [], 'filters');
+	const ui = editor({ 'filters.read': filter }, { request: () => result.promise });
+	filter.input.value = 'intitle:news';
+	const saving = ui.saveAll();
+	filter.input.value = 'intitle:later'; ui.sections.get('filters').revision++;
+	result.resolve({ schema: ui.schema, values: { 'filters.read': ['intitle:news'] } });
+	assert.equal(await saving, false);
+	assert.equal(filter.input.value, 'intitle:later');
+	assert.deepEqual(filter.initial, ['intitle:news']);
+	assert.equal(ui.hasDraft(), true);
+});
+
+test('global account saves preserve every category when the server rejects one field', async () => {
+	const article = field('boolean', true); const filters = field('string_list', [], 'filters');
+	const failure = new Error('invalid_filter'); failure.status = 400; failure.details = { field: 'filters.read' };
+	const ui = editor({ 'mark_when.article': article, 'filters.read': filters }, { request: async () => { throw failure; } });
+	article.input.checked = false; filters.input.value = 'intitle:(';
+	assert.equal(await ui.saveAll(), false);
+	assert.equal(ui.hasDraft('reading'), true);
+	assert.equal(ui.hasDraft('filters'), true);
+	assert.equal(filters.error.textContent, '过滤条件的语法有误。');
+	assert.equal(article.initial, true);
+});
+
+test('global account saving waits for an ongoing category write before submitting the remaining drafts', async () => {
+	const result = deferred(); const calls = [];
+	const article = field('boolean', true); const privacy = field('boolean', true, 'privacy');
+	const ui = editor({ 'mark_when.article': article, "retrieve_extension_list": privacy }, {
+		request: (action, params, options) => {
+			calls.push(options.body.values);
+			return calls.length === 1
+				? result.promise
+				: {
+					schema: ui.schema,
+					values: { 'mark_when.article': false, "retrieve_extension_list": false }
+				};
+		},
+	});
+	article.input.checked = false; privacy.input.checked = false;
+	const first = ui.save('reading'); const all = ui.saveAll();
+	assert.equal(calls.length, 1);
+	result.resolve({ schema: ui.schema, values: { 'mark_when.article': false, "retrieve_extension_list": true } });
+	await first;
+	assert.equal(await all, true);
+	assert.deepEqual(calls, [{ 'mark_when.article': false }, { retrieve_extension_list: false }]);
+});
+
+test('an expired session is reported to the shared save action while all account drafts remain available', async () => {
+	const article = field('boolean', true); const updates = [];
+	const error = new Error('csrf_invalid'); error.status = 403;
+	const ui = editor({ 'mark_when.article': article }, { request: async () => { throw error; } }, {
+		externalActions: true, onDirty: (dirty, state) => updates.push({ dirty, ...state }),
+	});
+	article.input.checked = false;
+	assert.equal(await ui.saveAll(), false);
+	assert.deepEqual(updates.at(-1), { dirty: true, busy: false, invalid: true });
+	assert.equal(article.input.checked, false);
+	assert.equal(await ui.saveAll(), false);
+});
+
+test('changing a submitted value back to its old saved value while saving preserves that newer choice', async () => {
+	const result = deferred(); const article = field('boolean', true);
+	const ui = editor({ 'mark_when.article': article }, { request: () => result.promise });
+	article.input.checked = false;
+	const saving = ui.saveAll();
+	article.input.checked = true; ui.sections.get('reading').revision++;
+	result.resolve({ schema: ui.schema, values: { 'mark_when.article': false } });
+	assert.equal(await saving, false);
+	assert.equal(article.input.checked, true);
+	assert.equal(article.initial, false);
+	assert.deepEqual(ui.changes(), { 'mark_when.article': true });
+});
+
+test('queued category saves stop with a session error rather than leaving a saving message after a 403', async () => {
+	const result = deferred(); const article = field('boolean', true); const privacy = field('boolean', true, 'privacy');
+	let requests = 0;
+	const ui = editor({ 'mark_when.article': article, "retrieve_extension_list": privacy }, {
+		request: () => { requests++; return result.promise; },
+	});
+	article.input.checked = false; privacy.input.checked = false;
+	const first = ui.save('reading'); const second = ui.save('privacy');
+	const error = new Error('csrf_invalid'); error.status = 403; result.reject(error);
+	await Promise.all([first, second]);
+	assert.equal(requests, 1);
+	for (const state of ui.sections.values()) {
+		assert.equal(state.busy, false);
+		assert.equal(state.status.textContent, '登录状态已失效，请刷新页面后重试。');
+	}
+	assert.equal(ui.hasDraft('reading'), true);
+	assert.equal(ui.hasDraft('privacy'), true);
 });

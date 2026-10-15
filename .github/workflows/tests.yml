@@ -144,11 +144,12 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Test appearance, reading and account settings
+      - name: Test reading and settings on desktop and phone
         run: |
-          npm run test:browser:appearance -- --project=desktop
-          npm run test:browser:reading -- --project=desktop
-          npm run test:browser:account -- --project=desktop
+          npm run test:browser:appearance
+          npm run test:browser:reading -- --project=desktop --project=phone
+          npm run test:browser:account -- --project=desktop --project=phone
+          npm run test:browser:settings -- --project=desktop --project=phone
 
   database:
     name: SQLite and PostgreSQL contracts

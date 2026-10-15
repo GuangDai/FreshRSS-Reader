@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Обновить ленту',
 		'add' => 'Добавить',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Вернуться к вашим RSS-лентам',
 		'cancel' => 'Отменить',
 		'close' => 'Закрыть',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Удалить',
 		'rename' => 'Переименовать',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Посмотреть на сайте',
 		'submit' => 'Отправить',
 		'truncate' => 'Удалить все статьи',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Пароль',
 			'format' => '<small>Не менее 7 символов</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Требуется повторная аутентификация',

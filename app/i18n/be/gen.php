@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Абнавіць стужкі',
 		'add' => 'Дадаць',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Вярнуцца да RSS-стужак',
 		'cancel' => 'Скасаваць',
 		'close' => 'Закрыць',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Выдаліць',
 		'rename' => 'Перайменаваць',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Праглядзець сайт',
 		'submit' => 'Адправіць',
 		'truncate' => 'Выдаліць усе артыкулы',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Пароль',
 			'format' => '<small>Не менш за 7 сімвалаў</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Патрабуецца паўторная аўтэнтыфікацыя',

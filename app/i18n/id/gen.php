@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'Perbarui umpan',
 		'add' => 'Tambah',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← Kembali ke umpan RSS Anda',
 		'cancel' => 'Batal',
 		'close' => 'Tutup',
@@ -48,6 +49,7 @@ return array(
 		'remove' => 'Hapus',
 		'rename' => 'Ubah nama',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Lihat situs',
 		'submit' => 'Kirim',
 		'truncate' => 'Hapus semua artikel',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'Kata sandi',
 			'format' => '<small>Paling tidak 7 karakter</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => 'Autentikasi ulang diperlukan',

@@ -2,8 +2,9 @@
 	declare(strict_types=1);
 	/** @var FreshRSS_View $this */
 ?>
-<main class="prompt">
-	<h1><?= _t('gen.auth.registration') ?></h1>
+<main class="prompt account-prompt" aria-labelledby="account-heading">
+	<a class="account-brand" href="<?= _url('index', 'index') ?>">FreshRSS</a>
+	<h1 id="account-heading"><?= _t('gen.auth.registration') ?></h1>
 
 	<form method="post" action="<?= _url('user', 'create') ?>">
 		<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
@@ -32,9 +33,9 @@
 
 		<div class="form-group">
 			<label for="new_user_name"><?= _t('gen.auth.username') ?></label>
-			<input id="new_user_name" name="new_user_name" type="text" size="16" required="required" autocomplete="off"
-				pattern="<?= FreshRSS_user_Controller::USERNAME_PATTERN ?>" autocapitalize="off" />
-			<p class="help"><?= _i('help') ?> <?= _t('gen.auth.username.format') ?></p>
+			<input id="new_user_name" name="new_user_name" type="text" size="16" required="required" autocomplete="username"
+				pattern="<?= FreshRSS_user_Controller::USERNAME_PATTERN ?>" autocapitalize="off" aria-describedby="username-format" />
+			<p class="help" id="username-format"><?= _t('gen.auth.username.format') ?></p>
 		</div>
 
 		<?php if ($this->show_email_field) { ?>
@@ -42,18 +43,20 @@
 				<label for="new_user_email">
 					<?= _t('gen.auth.email') ?>
 				</label>
-				<input id="new_user_email" name="new_user_email" type="email" required="required" />
+				<input id="new_user_email" name="new_user_email" type="email" required="required" autocomplete="email" />
 			</div>
 		<?php } ?>
 
 		<div class="form-group">
 			<label for="new_user_passwordPlain"><?= _t('gen.auth.password') ?></label>
 			<div class="stick">
-				<input type="password" id="new_user_passwordPlain" name="new_user_passwordPlain" required="required" autocomplete="new-password" pattern=".{7,}" />
-				<button type="button" class="btn toggle-password"><?= _i('key') ?></button>
+				<input type="password" id="new_user_passwordPlain" name="new_user_passwordPlain" required="required" autocomplete="new-password" pattern=".{7,}"
+					aria-describedby="password-format" />
+				<button type="button" class="btn toggle-password" aria-label="<?= _t('gen.auth.password.show') ?>"
+					aria-controls="new_user_passwordPlain" aria-pressed="false"><?= _i('key') ?></button>
 			</div>
 			<noscript><b><?= _t('gen.js.should_be_activated') ?></b></noscript>
-			<p class="help"><?= _i('help') ?> <?= _t('gen.auth.password.format') ?></p>
+			<p class="help" id="password-format"><?= _t('gen.auth.password.format') ?></p>
 
 		</div>
 

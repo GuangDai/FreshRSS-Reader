@@ -14,6 +14,7 @@ return array(
 	'action' => array(
 		'actualize' => 'フィードを更新する',
 		'add' => '追加',
+		'back_to_reading' => 'Back to reading',	// TODO
 		'back_to_rss_feeds' => '← RSSフィードに戻る',
 		'cancel' => 'キャンセル',
 		'close' => '閉じる',
@@ -48,6 +49,7 @@ return array(
 		'remove' => '消去',
 		'rename' => '名前を変更する',
 		'retry' => 'Retry',	// TODO
+		'save_changes' => 'Save changes',	// TODO
 		'see_website' => 'Webサイトを開く',
 		'submit' => '保存',
 		'truncate' => 'すべての記事を消去する',
@@ -62,6 +64,7 @@ return array(
 		'password' => array(
 			'_' => 'パスワード',
 			'format' => '<small>7文字以上必要です</small>',
+			'show' => 'Show password',	// TODO
 		),
 		'reauth' => array(
 			'header' => '再認証が必要です',
