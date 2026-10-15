@@ -107,6 +107,11 @@ async function openSettings(page) {
 	await expect(page.locator('#settings-page')).toBeVisible();
 }
 
+async function expandFeeds(page) {
+	await page.locator('[data-toggle-category="1"]').click();
+	await expect(page.locator('.feed-button').first()).toBeVisible();
+}
+
 test.beforeEach(async ({ page }) => {
 	test.skip(!username || !password, 'Use an isolated local test account.');
 	await login(page);
@@ -262,6 +267,7 @@ test('touch controls remain usable on tablets beyond the mobile breakpoint', asy
 	try {
 		await login(page);
 		await openReader(page);
+		await expandFeeds(page);
 		for (const selector of ['.feed-button', '#quick-layout', '#open-settings', '#article-search input']) {
 			const target = await page.locator(selector).first().boundingBox();
 			expect(target.height, `${selector} touch height`).toBeGreaterThanOrEqual(44);
@@ -285,14 +291,16 @@ test('touch controls remain usable on tablets beyond the mobile breakpoint', asy
 test('minimum width sidebar and long active feed names do not displace the reader controls', async ({ page }) => {
 	await openReader(page, { sidebarWidth: 160, listWidth: 240, fontSize: 8, readingWidth: 280, density: 'compact' });
 	await expectContained(page.locator('.sidebar'));
+	await expandFeeds(page);
 	await page.locator('.feed-button').first().click();
 	await expectContained(page.locator('.toolbar'));
 	expect(await page.locator('.toolbar').evaluate(node => node.getBoundingClientRect().height)).toBeLessThan(120);
 	await page.setViewportSize({ width: 320, height: 568 });
 	await page.locator('#toggle-sidebar').click();
 	await expectContained(page.locator('.sidebar'));
+	await page.locator('#close-sidebar').click();
 	await page.locator('#open-settings').click();
-	await expectContained(page.locator('#appearance-dialog'));
+	await expectContained(page.locator('#settings-page'));
 });
 
 for (const viewport of [{ width: 240, height: 568 }, { width: 667, height: 320 }, { width: 821, height: 600 }, { width: 1440, height: 900 }]) {
@@ -300,6 +308,7 @@ for (const viewport of [{ width: 240, height: 568 }, { width: 667, height: 320 }
 		await page.setViewportSize(viewport);
 		await openReader(page, { sidebarWidth: 160 });
 		if (await page.locator('#toggle-sidebar').isVisible()) await page.locator('#toggle-sidebar').click();
+		await expandFeeds(page);
 		await page.locator('#toggle-feed-selection').click();
 		await expectContained(page.locator('.sidebar'));
 		await page.locator('#select-visible-feeds').click();
@@ -433,6 +442,7 @@ test.describe('touch reading controls and long forms', () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await openReader(page);
 		await page.locator('#toggle-sidebar').click();
+		await expandFeeds(page);
 		await page.locator('#toggle-feed-selection').click();
 		const row = page.locator('.feed-row').first();
 		const before = await row.evaluate(node => globalThis.getComputedStyle(node).backgroundColor);

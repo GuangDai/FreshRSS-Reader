@@ -621,6 +621,9 @@ test('subscription failure has text feedback and touch navigation remains usable
 		await expect(page.locator('#feed-search')).toBeFocused();
 		await expect(page.locator('#reader-sidebar #toggle-feed-selection, #reader-sidebar .sidebar-bottom')).toHaveCount(0);
 	}
+	await page.locator('[data-toggle-category="1"]').click();
+	await expect(page.locator('[data-toggle-category="1"]')).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('[data-feed="2"]')).toBeVisible();
 	await expect(page.locator('[data-feed="2"]')).toHaveAccessibleName(/抓取失败/);
 	await expect(page.locator('[data-feed="2"]')).toHaveAttribute('title', /抓取失败/);
 	await expect(page.locator('[data-feed="2"] .feed-dot')).toHaveText('▲');

@@ -142,13 +142,16 @@ input[type="search"], select {
 .primary-nav { display: grid; gap: 4px; }
 
 .primary-nav button {
-	padding: 10px 12px;
+	padding: 10px 8px;
 	display: flex;
 	min-height: 44px;
+	min-width: 0;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
 	text-align: start;
 }
+
+.primary-nav button > [data-i18n] { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .primary-nav button[aria-current="page"], .feed-button[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
 
@@ -156,7 +159,9 @@ input[type="search"], select {
 
 .subscriptions-heading { margin-top: 12px; padding-inline-start: 10px; display: flex; color: var(--muted); font-size: .8667rem; align-items: center; justify-content: space-between; gap: 4px; }
 
-.subscriptions-heading a { padding: 8px; display: inline-flex; min-width: 44px; min-height: 44px; font-size: .9333rem; border-radius: var(--radius-field); align-items: center; justify-content: center; }
+.subscriptions-heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.subscriptions-heading a { padding: 8px; display: inline-flex; min-width: 44px; min-height: 44px; font-size: .9333rem; border-radius: var(--radius-field); align-items: center; justify-content: center; flex-shrink: 0; white-space: nowrap; }
 
 .subscriptions-tools { display: flex; min-width: 0; align-items: center; gap: 2px; }
 
@@ -164,11 +169,33 @@ input[type="search"], select {
 
 .subscriptions-heading a:hover { background: var(--accent-soft); text-decoration: none; }
 
-.feed-tree { min-height: 6rem; overflow: auto; flex: 1; overscroll-behavior: contain; scrollbar-width: thin; }
+.feed-tree { margin-inline: -13px; min-height: 6rem; min-width: 0; overflow: auto; flex: 1; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; }
 
 .feed-group { margin-block: 12px; }
 
-.feed-group > summary { padding: 10px; min-height: 40px; color: var(--muted); font-size: .8667rem; cursor: pointer; }
+.feed-group-header { display: grid; min-width: 0; grid-template-columns: 44px minmax(44px, 1fr) 44px; align-items: center; border-radius: var(--radius-field); }
+
+.feed-group-header > button { padding: 0; min-height: 44px; min-width: 44px; }
+
+.feed-group-toggle { display: inline-flex; align-items: center; justify-content: center; }
+
+.feed-group-toggle .reader-icon { width: 14px; height: 14px; }
+
+.feed-group-toggle:dir(rtl) .reader-icon { transform: rotate(180deg); }
+
+.feed-group-toggle[aria-expanded="true"] .reader-icon { transform: rotate(90deg); }
+
+.feed-group-header > .feed-group-name { padding-inline: 4px; min-width: 0; width: 100%; font-size: .9333rem; text-align: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.feed-group-header > .feed-group-unread { margin: 0; width: 44px; font-size: .8667rem; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: isolate; }
+
+.feed-group-header:has([aria-current="page"]) { background: var(--accent-soft); }
+
+.feed-group-header > [aria-current="page"] { color: var(--accent); border-color: var(--accent); font-weight: 650; }
+
+.feed-group-header > button:focus-visible { outline-offset: -3px; }
+
+.feed-group-feeds { padding-inline-start: 44px; min-width: 0; }
 
 .feed-button { padding: 10px; display: flex; width: 100%; min-height: 44px; font-size: .9333rem; align-items: center; gap: 8px; text-align: start; }
 
@@ -192,7 +219,7 @@ input[type="search"], select {
 
 .toolbar { padding: 12px 20px; display: grid; border-bottom: 1px solid var(--line); grid-template-columns: minmax(100px, 1fr) minmax(120px, 340px) auto 44px auto; grid-template-areas: "heading search layout refresh settings"; align-items: center; gap: 12px; }
 
-.view-heading { display: grid; min-width: 0; grid-area: heading; gap: 4px; }
+.view-heading { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); grid-area: heading; gap: 4px; }
 
 #page-summary { color: var(--muted); font-size: .8667rem; line-height: 1.4; min-height: 1.4em; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -412,7 +439,7 @@ fieldset.settings-grid { margin: 20px 0; min-width: 0; padding: 0; border: 0; }
 input, select, textarea { min-width: 0; }
 
 @media (any-pointer: coarse) {
-	button, .sidebar-bottom a, .article-actions a, .feed-group > summary, input:not([type="checkbox"]), select { min-height: 44px; }
+	button, .sidebar-bottom a, .article-actions a, input:not([type="checkbox"]), select { min-height: 44px; }
 
 	button { min-width: 44px; }
 

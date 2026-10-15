@@ -52,6 +52,72 @@ async function readingAutomation(page, reader, readerServer, flags) {
 	await expect(page.locator('.entry-card')).toHaveCount(4);
 }
 
+async function showSubscriptions(page) {
+	if (await page.locator('#toggle-sidebar').isVisible() && await page.locator('body').getAttribute('data-sidebar-open') !== 'true') {
+		await page.locator('#toggle-sidebar').click();
+	}
+}
+
+async function hideSubscriptions(page) {
+	if (await page.locator('body').getAttribute('data-sidebar-open') !== 'true') return;
+	const backdrop = page.locator('#close-sidebar');
+	const bounds = await backdrop.boundingBox();
+	await backdrop.click({ position: { x: bounds.width - 8, y: bounds.height / 2 } });
+}
+
+function categoryFeeds(page, id) {
+	return page.locator('.feed-group').filter({ has: page.locator(`[data-category="${id}"]`) }).locator('.feed-group-feeds');
+}
+
+async function categoryReading(page, reader) {
+	const categories = [{ id: 10, name: '科技' }, { id: 20, name: '生活' }];
+	const feeds = [
+		{ id: 1, name: 'Alpha 科技', categoryId: 10, unread: 9 },
+		{ id: 2, name: 'Beta 设计', categoryId: 10, unread: 4, enabled: false },
+		{ id: 3, name: 'Gamma 编程', categoryId: 10, unread: 1 },
+		{ id: 4, name: '城市观察', categoryId: 20, unread: 6 },
+		{ id: 5, name: '隐藏科技', categoryId: 10, unread: 100, priority: -5 },
+		{ id: 6, name: '归档科技', categoryId: 10, unread: 200, priority: -10 },
+	].map(feed => ({ ...reader.feeds[0], ...feed }));
+	const items = feeds.filter(feed => feed.priority >= 0).map((feed, index) => ({
+		id: String(310 - index),
+		title: feed.name + '的文章',
+		feedId: feed.id,
+		date: 1791800000,
+		read: false,
+		starred: false,
+		link: '',
+		content: '<p>分类阅读正文</p>',
+	}));
+	const requests = []; const writes = [];
+	await page.route(url => url.searchParams.get('c') === 'reader' && ['feeds', 'items', 'article', 'state'].includes(url.searchParams.get('a')), route => {
+		const url = new URL(route.request().url()); const action = url.searchParams.get('a');
+		if (action === 'feeds') return route.fulfill({ json: { version: 1, feeds, categories } });
+		if (action === 'items') {
+			const query = Object.fromEntries(['get', 'filter', 'search', 'cursor', 'state'].map(key => [key, url.searchParams.get(key) || '']));
+			requests.push({ ...query, hasState: url.searchParams.has('state') });
+			const categoryId = query.get.startsWith('c_') ? Number(query.get.slice(2)) : null;
+			const matches = items.filter(item => (!categoryId || feeds.find(feed => feed.id === item.feedId).categoryId === categoryId) &&
+				(query.filter !== 'unread' || !item.read) && (!query.search || item.title.includes(query.search)));
+			const offset = query.cursor ? 2 : 0;
+			const next = matches.length > offset + 2 ? 'next-category-page' : null;
+			return route.fulfill({ json: { version: 1, items: matches.slice(offset, offset + 2), next } });
+		}
+		if (action === 'state') {
+			const change = route.request().postDataJSON(); writes.push(change);
+			const item = items.find(item => item.id === change.id); const feed = feeds.find(feed => feed.id === item.feedId);
+			if (typeof change.read === 'boolean' && change.read !== item.read) feed.unread += change.read ? -1 : 1;
+			Object.assign(item, change);
+			return route.fulfill({ json: { version: 1, read: item.read, starred: item.starred } });
+		}
+		return route.fulfill({ json: { version: 1, article: items.find(item => item.id === url.searchParams.get('id')) } });
+	});
+	await page.reload();
+	await expect(page.locator('.entry-card')).toHaveCount(2);
+	await expect(page.locator('#article-list')).toHaveAttribute('aria-busy', 'false');
+	return { requests, writes };
+}
+
 test('public reading shows sign in and hides controls that require an account', async ({ page, reader, readerServer }) => {
 	await readingAutomation(page, reader, readerServer, { readOnly: true, autoMarkArticle: false, autoMarkSite: false });
 	await expect(page.locator('#sign-in')).toBeVisible();
@@ -144,6 +210,7 @@ test('responsive layout choices match the available views and preserve a saved s
 
 test('choosing the current feed again preserves the article, list position, and loaded results', async ({ page, reader }) => {
 	await page.setViewportSize({ width: 1440, height: 300 });
+	await page.locator('[data-toggle-category="1"]').click();
 	const feed = page.locator('[data-feed="1"]');
 	await feed.click();
 	await expect(page.locator('#view-title')).toHaveText('少数派');
@@ -161,6 +228,117 @@ test('choosing the current feed again preserves the article, list position, and 
 	expect(await page.locator('#article-frame').getAttribute('srcdoc')).toBe(frame);
 	expect(listRequests).toBe(0);
 	expect(reader.writes).toHaveLength(0);
+});
+
+test('category controls separate expansion, all articles, and unread articles while clearing article search', async ({ page, reader }) => {
+	const { requests } = await categoryReading(page, reader);
+	await showSubscriptions(page);
+	for (const id of [10, 20]) {
+		await expect(page.locator(`[data-toggle-category="${id}"]`)).toHaveAttribute('aria-expanded', 'false');
+		await expect(categoryFeeds(page, id)).toHaveJSProperty('hidden', true);
+	}
+	const count = requests.length;
+	await page.locator('[data-toggle-category="10"]').click();
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', false);
+	await page.locator('[data-toggle-category="10"]').click();
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', true);
+	expect(requests).toHaveLength(count);
+	await hideSubscriptions(page);
+	const search = page.locator('#article-search input');
+	await search.fill('Alpha'); await search.press('Enter');
+	await expect.poll(() => requests.at(-1).search).toBe('Alpha');
+	await showSubscriptions(page);
+	await page.locator('[data-category="10"]').click();
+	await expect.poll(() => requests.at(-1)).toMatchObject({ get: 'c_10', filter: 'all', search: '' });
+	await expect(search).toHaveValue('');
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', true);
+	if (await page.locator('#toggle-sidebar').isVisible()) await expect(page.locator('body')).toHaveAttribute('data-sidebar-open', 'false');
+	await search.fill('Beta'); await search.press('Enter');
+	await expect.poll(() => requests.at(-1).search).toBe('Beta');
+	await showSubscriptions(page);
+	await page.locator('[data-category-unread="10"]').click();
+	await expect.poll(() => requests.at(-1)).toMatchObject({ get: 'c_10', filter: 'unread', search: '' });
+	await expect(search).toHaveValue('');
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', true);
+	if (await page.locator('#toggle-sidebar').isVisible()) await expect(page.locator('body')).toHaveAttribute('data-sidebar-open', 'false');
+});
+
+test('category unread totals include every feed regardless of subscription search or article page and update after reading', async ({ page, reader }) => {
+	const { requests, writes } = await categoryReading(page, reader);
+	const total = page.locator('[data-category-unread="10"]');
+	await showSubscriptions(page);
+	await expect(total).toHaveText('14');
+	await page.locator('#feed-search').fill('Alpha');
+	await expect(page.locator('[data-feed="1"]')).toBeVisible();
+	await expect(page.locator('[data-feed="2"]')).toBeHidden();
+	await expect(total).toHaveText('14');
+	await page.locator('#feed-search').fill('');
+	await page.locator('[data-category="10"]').click();
+	await expect.poll(() => requests.at(-1).get).toBe('c_10');
+	await page.locator('#next-page').click();
+	await expect(page.locator('.entry-card')).toHaveCount(1);
+	await expect(page.locator('.entry-card')).toHaveAttribute('data-id', '308');
+	await expect(total).toHaveText('14');
+	await page.locator('.entry-card').click();
+	await expect(page.locator('#article-frame')).toBeVisible();
+	await page.locator('#mark-read').click();
+	await expect(page.locator('#mark-read')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('#mark-read')).toBeEnabled();
+	await expect.poll(() => writes.length).toBe(1);
+	await expect(total).toHaveText('13');
+	await page.locator('#close-article').click();
+	await showSubscriptions(page);
+	await expect(total).toHaveText('13');
+	await expect(page.locator('[data-category-unread="20"]')).toHaveText('6');
+});
+
+test('category all articles explicitly clears a legacy state even when the category and visible filter already match', async ({ page, reader, readerServer }) => {
+	const { requests } = await categoryReading(page, reader);
+	await page.goto(readerServer.origin + '/i/?get=c_10&state=1');
+	await expect(page.locator('.entry-card')).toHaveCount(2);
+	await expect.poll(() => requests.at(-1)).toMatchObject({ get: 'c_10', filter: 'all', search: '', state: '1' });
+	// Retain the active legacy state while spelling out the same visible filter in the URL.
+	await page.evaluate(() => {
+		const url = new URL(globalThis.location.href); url.searchParams.set('filter', 'all');
+		globalThis.history.replaceState(globalThis.history.state, '', url.href);
+	});
+	const before = new URL(page.url());
+	expect(before.searchParams.get('filter')).toBe('all');
+	expect(before.searchParams.get('state')).toBe('1');
+	await showSubscriptions(page);
+	const count = requests.length;
+	await page.locator('[data-category="10"]').click();
+	await expect.poll(() => requests.length).toBe(count + 1);
+	await expect.poll(() => requests.at(-1)).toMatchObject({ get: 'c_10', filter: 'all', search: '', state: '', hasState: false });
+	await expect.poll(() => new URL(page.url()).searchParams.has('state')).toBe(false);
+});
+
+test('category search temporarily expands matches and category changes with Back and Forward retain manual expansion', async ({ page, reader }) => {
+	await categoryReading(page, reader);
+	await showSubscriptions(page);
+	await page.locator('[data-toggle-category="10"]').click();
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', false);
+	await page.locator('#feed-search').fill('城市');
+	await expect(page.locator('[data-feed="4"]')).toBeVisible();
+	await expect(categoryFeeds(page, 20)).toHaveJSProperty('hidden', false);
+	await page.locator('#feed-search').fill('');
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', false);
+	await expect(categoryFeeds(page, 20)).toHaveJSProperty('hidden', true);
+	await page.locator('[data-category="20"]').click();
+	await expect(page.locator('.entry-card')).toHaveCount(1);
+	await expect(page.locator('.entry-card')).toHaveAttribute('data-id', '307');
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', false);
+	await expect(categoryFeeds(page, 20)).toHaveJSProperty('hidden', true);
+	await page.locator('.entry-card').click();
+	await expect(page.locator('#article-frame')).toBeVisible();
+	await page.goBack();
+	await expect(page.locator('body')).toHaveAttribute('data-article-open', 'false');
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', false);
+	await expect(categoryFeeds(page, 20)).toHaveJSProperty('hidden', true);
+	await page.goForward();
+	await expect(page.locator('#article-frame')).toBeVisible();
+	await expect(categoryFeeds(page, 10)).toHaveJSProperty('hidden', false);
+	await expect(categoryFeeds(page, 20)).toHaveJSProperty('hidden', true);
 });
 
 test('choosing the current article again preserves its frame, reading position, history, and manual unread choice', async ({ page, reader, readerServer }) => {

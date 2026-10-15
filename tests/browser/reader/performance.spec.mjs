@@ -17,7 +17,7 @@ test('large subscription trees reuse nodes while articles change and counts refr
 	});
 	const categories = Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `Category ${index + 1}` }));
 	const feeds = Array.from({ length: 5000 }, (_, index) => ({
-		id: index + 1, name: `Feed ${index + 1}`, categoryId: Math.floor(index / 50) + 1, unread: 1, error: false,
+		id: index + 1, name: `Feed ${index + 1}`, categoryId: Math.floor(index / 50) + 1, unread: 1, error: false, priority: 10, enabled: true,
 	}));
 	await page.route('**/*c=reader&a=feeds*', route => route.fulfill({ json: { version: 1, categories, feeds } }));
 	await page.route('**/*c=reader&a=article*', route => {
@@ -31,6 +31,15 @@ test('large subscription trees reuse nodes while articles change and counts refr
 	});
 	await page.goto('./?c=reader');
 	await expect(page.locator('.feed-button')).toHaveCount(5000);
+	await expect(page.locator('[data-toggle-category][aria-expanded=false]')).toHaveCount(100);
+	await expect(page.locator('.feed-group-feeds:visible')).toHaveCount(0);
+	const firstToggle = page.locator('[data-toggle-category="1"]');
+	const secondToggle = page.locator('[data-toggle-category="2"]');
+	await firstToggle.click();
+	await expect(firstToggle).toHaveAttribute('aria-expanded', 'true');
+	await firstToggle.click(); await secondToggle.click();
+	await expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.locator('.entry-card').first()).toBeVisible();
 	await page.evaluate(() => {
 		globalThis.feedMutations = 0;
@@ -44,16 +53,19 @@ test('large subscription trees reuse nodes while articles change and counts refr
 		await page.locator('#close-article').click();
 	}
 	expect(await page.evaluate(() => globalThis.feedMutations)).toBe(0);
-	await page.locator('.feed-group').first().evaluate(group => { group.open = false; });
 	feeds[0].unread = 2; feeds[0].name = 'Renamed feed';
 	await page.locator('#refresh').click();
 	await expect(page.locator('.feed-name').first()).toHaveText('Renamed feed');
 	expect(await page.evaluate(() => globalThis.firstFeedNode === document.querySelector('.feed-button'))).toBe(true);
-	await expect(page.locator('.feed-group').first()).not.toHaveAttribute('open');
+	await expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
 	await page.locator('#feed-search').fill('Renamed feed');
 	await expect(page.locator('.feed-button:visible')).toHaveCount(1);
+	await expect(firstToggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('[data-category-unread="1"]')).toHaveText('51');
 	await page.locator('#feed-search').fill('');
-	await expect(page.locator('.feed-group').first()).not.toHaveAttribute('open');
+	await expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.locator('#article-frame')).toHaveCount(1);
 	const pageSize = await page.locator('#reader-bootstrap').evaluate(node => JSON.parse(node.textContent).preferences.pageSize);
 	await expect(page.locator('.entry-card')).toHaveCount(pageSize);

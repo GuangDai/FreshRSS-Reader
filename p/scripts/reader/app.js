@@ -44,7 +44,14 @@ const media = matchMedia('(prefers-color-scheme: dark)');
 const mobile = matchMedia('(max-width: 820px), (max-height: 500px) and (max-width: 1100px) and (any-pointer: coarse)');
 const forcedColours = matchMedia('(forced-colors: active)');
 const appearanceChoices = new AppearanceChoices({ element, t, language: bootstrap.language, systemDark: () => media.matches });
-const feedTree = new FeedTree($('feed-tree'), element, { errorLabel: t('feedError') });
+const feedTree = new FeedTree($('feed-tree'), element, {
+	errorLabel: t('feedError'),
+	locale: bootstrap.language,
+	expandLabel: t('expandCategory'),
+	collapseLabel: t('collapseCategory'),
+	allLabel: t('categoryAll'),
+	unreadLabel: t('categoryUnread'),
+});
 const dateFormatter = new Intl.DateTimeFormat(bootstrap.language, { month: 'short', day: 'numeric' });
 const articleDateFormatter = new Intl.DateTimeFormat(bootstrap.language, { dateStyle: 'medium', timeStyle: 'short' });
 let renderedItems = null;
@@ -389,7 +396,7 @@ function renderFeeds() {
 	feedTree.update(store.feeds, store.categories, store.feedRevision);
 	settingsSubscriptions.update();
 	if (settingsBuilt) settingsPage.updateFeeds();
-	feedTree.select(store.query.get);
+	feedTree.select(store.query.get, store.query.filter);
 	if (reconciledFeeds !== store.feeds) { reconciledFeeds = store.feeds; feedSelection.reconcile(store.feeds); }
 	renderFeedSelection();
 	const unread = feedTree.unread.toLocaleString(bootstrap.language);
@@ -423,11 +430,21 @@ function renderList() {
 	$('next-page').disabled = store.loading || !store.next;
 	$('mark-page-read').disabled = store.csrfInvalid || store.loading || store.pending.size > 0 ||
 		navigator.onLine === false || !unread;
-	$('page-summary').textContent = store.loading
+	const scopeId = Number(store.query.get.slice(2));
+	const feed = store.query.get.startsWith('f_') ? feedTree.feedsById.get(scopeId) : null;
+	const category = store.query.get.startsWith('c_') ? store.categories.find(category => category.id === scopeId) : null;
+	let summary = store.loading
 		? t('loading')
 		: t('pageSummary').replace('{page}', String(store.history.length + 1)).replace('{count}', String(store.items.length));
-	const feed = feedTree.feedsById.get(Number(store.query.get.slice(2)));
-	$('view-title').textContent = feed ? feed.name + (store.query.filter === 'all' ? '' : ' · ' + t(store.query.filter)) : t(store.query.filter);
+	if (category) {
+		summary += ' · ' + t('categoryUnreadSummary').replace('{count}',
+			(feedTree.groups.get(category.id)?.unread ?? 0).toLocaleString(bootstrap.language));
+	}
+	$('page-summary').textContent = summary;
+	$('page-summary').title = summary;
+	const scope = feed || category;
+	const title = scope ? scope.name + (store.query.filter === 'all' ? '' : ' · ' + t(store.query.filter)) : t(store.query.filter);
+	$('view-title').textContent = title; $('view-title').title = title;
 	if (renderedItems !== store.items) {
 		renderedItems = store.items;
 		entryNodes.clear();
@@ -724,6 +741,18 @@ feedEditor.dialog.addEventListener('close', () => {
 });
 $('feed-search').addEventListener('input', filterFeeds);
 $('feed-tree').addEventListener('click', event => {
+	const toggle = event.target.closest('[data-toggle-category]');
+	if (toggle) { feedTree.toggle(Number(toggle.dataset.toggleCategory)); return; }
+	const category = event.target.closest('[data-category], [data-category-unread]');
+	if (category) {
+		const unread = Object.hasOwn(category.dataset, 'categoryUnread');
+		sidebar(false); chooseStream({
+			get: 'c_' + (unread ? category.dataset.categoryUnread : category.dataset.category),
+			filter: unread ? 'unread' : 'all',
+			search: ''
+		});
+		return;
+	}
 	const button = event.target.closest('[data-feed]');
 	if (button) {
 		sidebar(false); chooseStream({ get: 'f_' + button.dataset.feed });
@@ -733,7 +762,7 @@ $('feed-tree').addEventListener('keydown', event => {
 	const target = event.target.closest('[data-select-feed], [data-feed]');
 	if (!target) return;
 	if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || event.altKey || event.metaKey || event.ctrlKey) return;
-	const ids = feedTree.matchingIds().filter(id => feedTree.groups.get(feedTree.nodes.get(id).categoryId).root.open);
+	const ids = feedTree.matchingIds().filter(id => feedTree.groups.get(feedTree.nodes.get(id).categoryId).expanded);
 	const current = Number(target.dataset.selectFeed || target.dataset.feed);
 	const index = ids.indexOf(current);
 	const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? ids.length - 1 : index + (event.key === 'ArrowDown' ? 1 : -1);
@@ -748,8 +777,9 @@ document.querySelector('.primary-nav').addEventListener('click', event => {
 });
 function chooseStream(query) {
 	clearTimeout(searchTimer);
-	$('article-search').elements.search.value = store.query.search;
-	if (store.error || !Object.entries(query).every(([key, value]) => store.query[key] === value)) queryList(query);
+	$('article-search').elements.search.value = query.search ?? store.query.search;
+	if (store.error || (Object.hasOwn(query, 'filter') && Object.hasOwn(store.query, 'state')) ||
+		!Object.entries(query).every(([key, value]) => store.query[key] === value)) queryList(query);
 }
 function searchArticles() {
 	clearTimeout(searchTimer);
