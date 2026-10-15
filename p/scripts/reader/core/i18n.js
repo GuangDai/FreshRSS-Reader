@@ -271,7 +271,7 @@ const en = {
 	preferencesNote: 'Changes apply to your account after you save.',
 	importFailed: 'Choose a valid settings JSON file no larger than {limit} KiB.',
 	navigation: 'Navigation',
-	keyboard: 'With focus in the reader controls: J / K next / previous · M read · S star',
+	keyboard: 'J / K next / previous · Space scroll down · Shift + Space scroll up · M read · S star',
 };
 const zh = {
 	sourceCode: '项目源码',
@@ -540,7 +540,7 @@ const zh = {
 	preferencesNote: '点击保存后，设置会应用到当前账号。',
 	importFailed: '请选择不超过 {limit} KiB 的有效设置 JSON 文件。',
 	navigation: '打开导航',
-	keyboard: '焦点在阅读器控件时：J / K 切换文章 · M 已读 · S 收藏',
+	keyboard: 'J / K 切换文章 · 空格向下翻屏 · Shift + 空格向上翻屏 · M 已读 · S 收藏',
 };
 export function translator(language) {
 	const dictionary = language.toLowerCase().startsWith('zh') ? zh : en;

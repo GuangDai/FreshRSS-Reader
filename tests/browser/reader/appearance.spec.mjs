@@ -632,7 +632,7 @@ test('subscription failure has text feedback and touch navigation remains usable
 	if (mobile) { expect(settings.width).toBeGreaterThanOrEqual(44); expect(settings.height).toBeGreaterThanOrEqual(44); }
 	const first = page.locator('.entry-card').first();
 	await first.focus(); await page.keyboard.press('Enter');
-	await expect(page.locator('#close-article')).toBeFocused();
+	await expect(page.locator('#article-pane')).toBeFocused();
 	await expect(page.locator('#article-frame')).toBeVisible();
 	if (mobile) {
 		await expect(page.locator('.article-list-pane')).toHaveJSProperty('inert', true);

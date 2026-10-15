@@ -53,7 +53,7 @@ export class ReadingPreloader {
 		if (store.loading || store.batchProgress) return;
 		const constrained = this.connection?.saveData || ['slow-2g', '2g'].includes(this.connection?.effectiveType);
 		const index = store.items.findIndex(item => item.id === store.selectedId);
-		const lead = Math.max(3, Math.min(store.pageSize, Math.max(Math.ceil(this.viewportRows * 0.75), Math.ceil(store.pageLatency / this.pace) + 2)));
+		const lead = Math.max(20, Math.min(50, Math.max(Math.ceil(this.viewportRows * 2), Math.ceil(store.pageLatency / this.pace) + 8)));
 		const readingNearEnd = !constrained && this.direction > 0 && index >= 0 && store.items.length - index - 1 <= lead;
 		const scrollingNearEnd = this.scrollIntent && this.distance <= (constrained ? 1 : Math.max(200, this.velocity * (store.pageLatency + 300)));
 		const fillViewport = !constrained && !store.selectedId && store.items.length >= store.pageSize && store.items.length < this.viewportRows;
@@ -61,13 +61,17 @@ export class ReadingPreloader {
 		if (constrained || store.loadingArticle) { store.prefetch([]); return; }
 		const ids = this.hintId ? [this.hintId] : [];
 		if (index >= 0 && store.article) {
-			const count = Math.min(4, Math.max(1, Math.ceil(store.articleLatency / this.pace) + 1));
+			const budget = Math.min(32, Math.max(0, store.cache.maxEntries - 1));
+			const behind = Math.min(6, Math.floor(budget / 3));
+			const count = Math.min(budget - behind, Math.max(8, Math.ceil((store.articleLatency + 6000) / this.pace)));
 			for (let step = 1; step <= count; step++) {
 				const item = store.items[index + this.direction * step];
 				if (item) ids.push(item.id);
 			}
-			const behind = store.items[index - this.direction];
-			if (behind) ids.push(behind.id);
+			for (let step = 1; step <= behind; step++) {
+				const item = store.items[index - this.direction * step];
+				if (item) ids.push(item.id);
+			}
 		}
 		store.prefetch(ids);
 	}

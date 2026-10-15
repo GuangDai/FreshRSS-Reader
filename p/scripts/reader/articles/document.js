@@ -36,8 +36,37 @@ function articleTheme(theme, preferences) {
 	return fallback;
 }
 
-/** The frame has an opaque origin and no scripts/forms/navigation permissions. */
-export function articleDocument(article, preferences, theme, allowImages = false, labels = {}) {
+/** Runs only as our nonce-authorised script inside the opaque article frame. */
+function articleInteractions(channel, parentOrigin) {
+	const send = (action, key) => parent.postMessage({ type: 'reader-article', channel, action, key }, parentOrigin);
+	const scroll = direction => window.scrollBy({
+		top: direction * innerHeight * 0.9,
+		behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+	});
+	document.addEventListener('keydown', event => {
+		if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey ||
+			event.target.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"])')) return;
+		const key = event.key.toLowerCase();
+		if (key === ' ' && !event.target.closest('button,[role="button"]')) {
+			event.preventDefault(); scroll(event.shiftKey ? -1 : 1); return;
+		}
+		if (!['j', 'k', 'm', 's', 'escape'].includes(key)) return;
+		event.preventDefault(); send('key', key);
+	});
+	window.addEventListener('message', event => {
+		if (event.source !== parent || event.origin !== parentOrigin || event.data?.type !== 'reader-scroll' ||
+			event.data.channel !== channel || ![1, -1].includes(event.data.direction)) return;
+		scroll(event.data.direction);
+	});
+	for (const type of ['click', 'auxclick']) {
+		document.addEventListener(type, event => {
+			if (event.button <= 1 && event.target.closest('#article-title-link')) send('original');
+		});
+	}
+}
+
+/** Untrusted content remains in an opaque frame; CSP permits only our input bridge. */
+export function articleDocument(article, preferences, theme, allowImages = false, labels = {}, interactions = null) {
 	const palette = articleTheme(theme, preferences);
 	const font = preferences.style === 'paper' ? 'ui-serif,"Noto Serif CJK SC",Georgia,serif' : 'system-ui,-apple-system,sans-serif';
 	const template = document.createElement('template');
@@ -53,7 +82,8 @@ export function articleDocument(article, preferences, theme, allowImages = false
 		} else node.remove();
 	});
 	content.querySelectorAll('script,style,link,meta,base,object,embed,form,input,button,textarea,select,source').forEach(node => node.remove());
-	const removedAttributes = ['style', 'color', 'bgcolor', 'text', 'link', 'vlink', 'alink', 'face', 'srcdoc', 'id', 'name', 'srcset', 'poster', 'background'];
+	const removedAttributes = ['style', 'color', 'bgcolor', 'text', 'link', 'vlink', 'alink', 'face', 'srcdoc',
+		'id', 'name', 'srcset', 'poster', 'background', 'nonce'];
 	content.querySelectorAll('*').forEach(node => {
 		for (const attribute of [...node.attributes]) {
 			if (attribute.name.startsWith('on') || removedAttributes.includes(attribute.name)) {
@@ -77,7 +107,20 @@ export function articleDocument(article, preferences, theme, allowImages = false
 	});
 	const language = document.documentElement.lang;
 	const direction = document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr';
-	const csp = `default-src 'none'; img-src ${allowImages ? 'https: http:' : "'none'"}; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`;
+	const trusted = interactions && typeof interactions.nonce === 'string' && /^[a-zA-Z0-9+/_=-]{16,256}$/.test(interactions.nonce) &&
+		/^[a-f0-9]{32}$/.test(interactions.channel) && typeof interactions.parentOrigin === 'string';
+	const scriptPolicy = trusted ? `; script-src 'nonce-${interactions.nonce}'; script-src-attr 'none'` : '';
+	const csp = `default-src 'none'; img-src ${allowImages ? 'https: http:' : "'none'"}; style-src 'unsafe-inline'; ` +
+		`base-uri 'none'; form-action 'none'${scriptPolicy}`;
+	const link = safeLink(article.link);
+	const title = link
+		? `<a id="article-title-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" ` +
+		`title="${escapeHtml(labels.original || 'Open original')}">${escapeHtml(article.title)}</a>`
+		: escapeHtml(article.title);
+	const script = trusted
+		? `<script nonce="${escapeHtml(interactions.nonce)}">(${articleInteractions.toString()})` +
+		`(${JSON.stringify(interactions.channel)},${JSON.stringify(interactions.parentOrigin).replaceAll('<', '\\u003c')});</script>`
+		: '';
 	const byline = labels.byline ?? article.author;
 	const metadata = byline ? '<p class="meta">' + escapeHtml(byline) + '</p>' : '';
 	const imageNotice = imagesHiddenByPrivacy
@@ -91,6 +134,7 @@ body{margin:0 auto;padding:max(24px,env(safe-area-inset-top)) max(clamp(18px,5vw
 max(80px,env(safe-area-inset-bottom)) max(clamp(18px,5vw,48px),env(safe-area-inset-left));max-width:${preferences.readingWidth}px;background:${palette.surface};
 color:${palette.text};font:${preferences.fontSize}px/${preferences.lineHeight / 100} ${font};overflow-wrap:anywhere}
 h1{font-size:1.65em;line-height:1.4;letter-spacing:-.03em}
+h1 a{display:inline-block;min-height:44px;color:inherit;text-decoration:none}h1 a:hover{color:${palette.accent};text-decoration:underline}
 h2,h3{line-height:1.5}
 p{margin:1.2em 0}
 a{color:${palette.accent};text-decoration:underline;text-underline-offset:.15em}
@@ -109,5 +153,5 @@ svg{display:none}
 @media(max-height:480px){body{padding-top:max(10px,env(safe-area-inset-top))}h1{margin-block:.35em .4em}}
 @media(forced-colors:active){html,body,pre,th{background:Canvas;color:CanvasText}
 .meta,figcaption{color:CanvasText}a{color:LinkText}pre,td,th,hr{border-color:CanvasText}blockquote{border-color:LinkText}}
-</style></head><body dir="auto"><h1>${escapeHtml(article.title)}</h1>${metadata}${imageNotice}${template.innerHTML}</body></html>`;
+</style></head><body dir="auto"><h1>${title}</h1>${metadata}${imageNotice}${template.innerHTML}${script}</body></html>`;
 }

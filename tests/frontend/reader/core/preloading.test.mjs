@@ -15,6 +15,7 @@ function fixture(connection = null) {
 		pageSize: 50,
 		pageLatency: 500,
 		articleLatency: 300,
+		cache: { maxEntries: 12 },
 		prefetch: ids => wanted.push(ids),
 	};
 	const preloader = new ReadingPreloader(store, { connection, active: () => active, now: () => time, onMore: () => { pages++; } });
@@ -26,7 +27,7 @@ test('reading backwards prepares previous bodies and does not fetch another forw
 	f.store.selectedId = '18'; f.preloader.update(); f.preloader.run();
 	assert.equal(f.pages(), 1);
 	f.advance(500); f.store.selectedId = '17'; f.preloader.update(); f.preloader.run();
-	assert.deepEqual(f.wanted.at(-1), ['16', '15', '18']);
+	assert.deepEqual(f.wanted.at(-1), ['16', '15', '14', '13', '12', '11', '10', '9', '18', '19']);
 	assert.equal(f.pages(), 1);
 	f.preloader.suspend();
 });
@@ -58,8 +59,8 @@ test('rapid selections wait for a pause before fetching only the final neighbour
 		assert.equal(f.wanted.length, 0);
 		await new Promise(resolve => setTimeout(resolve, 200));
 		assert.equal(f.wanted.length, 1);
-		assert.equal(f.wanted[0][0], '11'); assert.ok(f.wanted[0].length <= 5);
-		assert.ok(f.wanted[0].every(id => Number(id) >= 9));
+		assert.equal(f.wanted[0][0], '11'); assert.equal(f.wanted[0].length, 11);
+		assert.ok(f.wanted[0].includes('18')); assert.ok(f.wanted[0].includes('7'));
 	} finally { f.preloader.suspend(); }
 });
 
@@ -68,5 +69,26 @@ test('a failed continuation cannot cause an automatic retry loop during later st
 	f.store.selectedId = '19'; f.store.moreError = new Error('offline');
 	f.preloader.update(); f.preloader.viewport(6, 0, 5, true); f.preloader.run();
 	assert.equal(f.pages(), 0);
+	f.preloader.suspend();
+});
+
+test('the reading window keeps eight following and three preceding bodies within the cache budget', () => {
+	const f = fixture();
+	f.preloader.update(); f.preloader.run();
+	assert.deepEqual(f.wanted.at(-1), ['6', '7', '8', '9', '10', '11', '12', '13', '4', '3', '2']);
+	f.store.cache.maxEntries = 4; f.preloader.run();
+	assert.deepEqual(f.wanted.at(-1), ['6', '7', '4']);
+	f.store.cache.maxEntries = 0; f.preloader.run();
+	assert.deepEqual(f.wanted.at(-1), []);
+	f.preloader.suspend();
+});
+
+test('a forward continuation starts with twenty articles still available', () => {
+	const f = fixture();
+	f.store.items = Array.from({ length: 100 }, (_, index) => ({ id: String(index) }));
+	f.store.selectedId = '70'; f.preloader.update(); f.preloader.run();
+	assert.equal(f.pages(), 0);
+	f.store.selectedId = '80'; f.preloader.update(); f.preloader.run();
+	assert.equal(f.pages(), 1);
 	f.preloader.suspend();
 });

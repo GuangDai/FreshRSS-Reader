@@ -360,7 +360,7 @@ test('choosing the current article again preserves its frame, reading position, 
 	let articleRequests = 0;
 	page.on('request', request => { if (new URL(request.url()).searchParams.get('a') === 'article') articleRequests++; });
 	await entry.click();
-	await expect(page.locator('#close-article')).toBeFocused();
+	await expect(page.locator('#article-pane')).toBeFocused();
 	expect(await page.locator('#article-frame').evaluate(node => node === globalThis.readerRefinementRepeatFrame)).toBe(true);
 	await expect.poll(() => page.frameLocator('#article-frame').locator('html').evaluate(node => node.scrollTop)).toBe(500);
 	await expect(page.locator('#mark-read')).toHaveAttribute('aria-pressed', 'false');
@@ -388,7 +388,7 @@ test('choosing a pending article again reuses its request and accepts the eventu
 		await expect(page.locator('#article-pane')).toHaveAttribute('aria-busy', 'true');
 		const historyLength = await page.evaluate(() => globalThis.history.length);
 		await entry.click();
-		await expect(page.locator('#close-article')).toBeFocused();
+		await expect(page.locator('#article-pane')).toBeFocused();
 		expect(articleRequests).toBe(1);
 		expect(await page.evaluate(() => globalThis.history.length)).toBe(historyLength);
 		release();
@@ -584,11 +584,11 @@ test('an empty search offers one clear action that recovers the current stream i
 test('original articles open directly without a separate image action', async ({ page, reader }) => {
 	await page.locator('.entry-card').first().click();
 	await expect(page.locator('#article-frame')).toBeVisible();
-	await expect(page.locator('.article-menu, #load-images')).toHaveCount(0);
-	await expect(page.locator('#original-link')).toHaveAttribute('href', 'https://example.org/article/0');
+	await expect(page.locator('.article-menu, #load-images, #original-link')).toHaveCount(0);
+	await expect(page.frameLocator('#article-frame').locator('h1 a')).toHaveAttribute('href', 'https://example.org/article/0');
 	await page.context().route('https://example.org/article/*', route => route.fulfill({ contentType: 'text/html', body: '<p>Original article fixture</p>' }));
 	const opened = page.waitForEvent('popup');
-	await page.locator('#original-link').click();
+	await page.frameLocator('#article-frame').locator('h1 a').click();
 	const popup = await opened;
 	await expect.poll(() => popup.url()).toBe('https://example.org/article/0');
 	await popup.close();
@@ -639,12 +639,18 @@ test('images load by default without another click while scripts, embeds and par
 	await expect(image).not.toHaveAttribute('onerror');
 	await image.scrollIntoViewIfNeeded();
 	await expect.poll(() => image.evaluate(node => node.complete && node.naturalWidth > 0)).toBe(true);
-	await expect(frame.locator('script, iframe, object, embed, form, input, [href^="javascript:"]')).toHaveCount(0);
+	await expect(frame.locator('script:not([nonce]), iframe, object, embed, form, input, [href^="javascript:"]')).toHaveCount(0);
+	await expect(frame.locator('script[nonce]')).toHaveCount(1);
 	await expect(frame.locator('.article-image-notice')).toHaveCount(0);
 	await expect(page.locator('#load-images')).toHaveCount(0);
 	expect(requests).toEqual(['/image.png']);
 	const contentFrame = await (await page.locator('#article-frame').elementHandle()).contentFrame();
 	expect(await contentFrame.evaluate(() => { try { return Boolean(globalThis.parent.document.body); } catch { return false; } })).toBe(false);
+	await contentFrame.evaluate(() => {
+		const script = document.createElement('script'); script.textContent = 'document.body.dataset.untrustedScript = "executed"';
+		document.body.append(script);
+	});
+	expect(await frame.locator('body').getAttribute('data-untrusted-script')).toBeNull();
 	expect(await page.locator('body').getAttribute('data-intruded')).toBeNull();
 	expect(reader.writes).toHaveLength(0);
 });
@@ -659,7 +665,8 @@ test('disabling remote images in privacy blocks requests without a per-article s
 	await page.locator('.entry-card').first().click();
 	const frame = page.frameLocator('#article-frame');
 	await expect(frame.getByText('本地图片文章')).toBeVisible();
-	await expect(frame.locator('img, script, iframe, object, form, input')).toHaveCount(0);
+	await expect(frame.locator('img, script:not([nonce]), iframe, object, form, input')).toHaveCount(0);
+	await expect(frame.locator('script[nonce]')).toHaveCount(1);
 	await expect(frame.locator('.article-image-notice')).toHaveCount(1);
 	await expect(frame.locator('.article-image-notice')).toContainText(/隐私/);
 	await expect(frame.getByText('文章照片', { exact: true })).toBeVisible();
@@ -710,7 +717,7 @@ test('article navigation stays fixed through read states, media, errors, scrolli
 	try {
 		await page.locator('.entry-card').first().click();
 		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[0].title);
-		await expect(page.locator('#original-link')).toBeVisible();
+		await expect(page.frameLocator('#article-frame').locator('h1 a')).toBeVisible();
 		await expect(page.frameLocator('#article-frame').locator('img')).toHaveCount(1);
 		const positions = await fixedControlGeometry(page, ['previous-article', 'mark-read', 'mark-star', 'next-article']);
 		for (const [id, pressed] of [['mark-read', 'true'], ['mark-read', 'false'], ['mark-star', 'true'], ['mark-star', 'false']]) {
@@ -724,7 +731,7 @@ test('article navigation stays fixed through read states, media, errors, scrolli
 		await expectFixedControls(page, positions, 'scrolled article');
 		await page.locator('#next-article').click();
 		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[1].title);
-		await expect(page.locator('#original-link')).toBeHidden();
+		await expect(page.frameLocator('#article-frame').locator('h1 a')).toBeHidden();
 		await expect(page.frameLocator('#article-frame').locator('img')).toHaveCount(0);
 		await expect(page.locator('#mark-read')).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('#mark-star')).toHaveAttribute('aria-pressed', 'true');
@@ -734,7 +741,7 @@ test('article navigation stays fixed through read states, media, errors, scrolli
 		await expectFixedControls(page, positions, 'pending article');
 		releaseArticle();
 		await expect(page.locator('#article-frame')).toHaveAttribute('title', articles[2].title);
-		await expect(page.locator('#original-link')).toBeVisible();
+		await expect(page.frameLocator('#article-frame').locator('h1 a')).toBeVisible();
 		await expectFixedControls(page, positions, 'loaded image article');
 		await page.locator('#next-article').click();
 		await expect(page.locator('#article-status')).toBeVisible();
@@ -864,10 +871,10 @@ for (const enabled of [false, true]) {
 		await readingAutomation(page, reader, readerServer, { autoMarkArticle: false, autoMarkSite: enabled });
 		await page.context().route('https://example.org/article/*', route => route.fulfill({ contentType: 'text/html', body: '<p>Original article fixture</p>' }));
 		await page.locator('.entry-card').first().click();
-		await expect(page.locator('#original-link')).toBeVisible();
+		await expect(page.frameLocator('#article-frame').locator('h1 a')).toBeVisible();
 		expect(reader.writes).toHaveLength(0);
 		const opened = page.waitForEvent('popup');
-		await page.locator('#original-link').click();
+		await page.frameLocator('#article-frame').locator('h1 a').click();
 		const popup = await opened;
 		await expect.poll(() => popup.url()).toBe('https://example.org/article/0');
 		await popup.close();

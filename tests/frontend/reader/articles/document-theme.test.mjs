@@ -9,7 +9,7 @@ const preferences = { style: 'editorial', readingWidth: 760, fontSize: 20, lineH
 const article = { title: 'Theme fixture', author: 'Reader', content: '' };
 
 // These tests isolate document construction; content sanitisation is covered in the browser suite.
-function render(theme, overrides = {}, allowImages = false, labels = {}) {
+function render(theme, overrides = {}, allowImages = false, labels = {}, value = article, interactions = null) {
 	const context = vm.createContext({
 		URL,
 		document: {
@@ -21,7 +21,7 @@ function render(theme, overrides = {}, allowImages = false, labels = {}) {
 		},
 	});
 	vm.runInContext(source, context);
-	return context.articleDocument(article, { ...preferences, ...overrides }, theme, allowImages, labels);
+	return context.articleDocument(value, { ...preferences, ...overrides }, theme, allowImages, labels, interactions);
 }
 
 for (const name of THEME_NAMES) {
@@ -103,4 +103,26 @@ test('the themed document retains language, image restrictions and script-free C
 	assert.ok(blocked.includes('default-src &#39;none&#39;; img-src &#39;none&#39;'));
 	assert.ok(!blocked.includes('script-src'));
 	assert.ok(render({}, {}, true).includes('img-src https: http:'));
+});
+
+test('the article title links only to an HTTP original and safely escapes its title and address', () => {
+	const document = render({}, {}, false, {}, { ...article, title: '<img onerror=alert(1)>', link: 'https://example.org/?a=1&b=2' });
+	assert.ok(document.includes('id="article-title-link" href="https://example.org/?a=1&amp;b=2" target="_blank" rel="noopener noreferrer"'));
+	assert.ok(document.includes('&lt;img onerror=alert(1)&gt;</a></h1>'));
+	for (const link of ['', 'javascript:alert(1)', 'data:text/html,unsafe']) {
+		assert.ok(!render({}, {}, false, {}, { ...article, link }).includes('id="article-title-link"'));
+	}
+});
+
+test('only a valid nonce permits the fixed input bridge, with no inline event handlers', () => {
+	const interactions = { nonce: '0123456789abcdef0123456789abcdef', channel: 'a'.repeat(32), parentOrigin: 'https://reader.example' };
+	const document = render({}, {}, false, {}, article, interactions);
+	assert.ok(document.includes('script-src &#39;nonce-' + interactions.nonce + '&#39;'));
+	assert.ok(document.includes('script-src-attr &#39;none&#39;'));
+	assert.equal((document.match(/<script /g) || []).length, 1);
+	assert.ok(document.includes('event.source !== parent'));
+	assert.ok(document.includes('event.origin !== parentOrigin'));
+	const script = document.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1];
+	assert.doesNotThrow(() => new vm.Script(script));
+	assert.ok(!render({}, {}, false, {}, article, { ...interactions, nonce: '" onerror=alert(1)' }).includes('<script'));
 });

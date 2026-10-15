@@ -276,7 +276,7 @@ test('touch controls remain usable on tablets beyond the mobile breakpoint', asy
 		await expect(page.locator('#article-search input')).toHaveCSS('font-size', '16px');
 		await page.locator('.entry-card').first().click();
 		await expect(page.frameLocator('#article-frame').getByText('Responsive article fixture')).toBeVisible();
-		const original = await page.locator('#original-link').boundingBox();
+		const original = await page.frameLocator('#article-frame').locator('h1 a').boundingBox();
 		expect(original.width).toBeGreaterThanOrEqual(44);
 		expect(original.height).toBeGreaterThanOrEqual(44);
 		await expect(page.locator('#load-images')).toHaveCount(0);
@@ -359,8 +359,8 @@ test.describe('touch reading controls and long forms', () => {
 				if (previous) expect(bounds.x).toBeGreaterThanOrEqual(previous.x + previous.width);
 				previous = bounds;
 			}
-			await expect(page.locator('#original-link')).toBeVisible();
-			await expect(page.locator('#original-link')).toBeInViewport();
+			await expect(page.frameLocator('#article-frame').locator('h1 a')).toBeVisible();
+			await expect(page.frameLocator('#article-frame').locator('h1 a')).toBeInViewport();
 			await expectContained(page.locator('.article-header'));
 			await expect(page.locator('#load-images')).toHaveCount(0);
 			const next = await page.locator('#next-article').boundingBox();
@@ -512,17 +512,19 @@ for (const width of [240, 320, 667, 1440]) {
 	});
 }
 
-test('the original article action remains directly reachable in the desktop article header', async ({ page }) => {
+test('the article title opens the original without a separate header action', async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await openReader(page);
 	await page.locator('.entry-card').first().click();
 	await expect(page.frameLocator('#article-frame').getByText('Responsive article fixture')).toBeVisible();
-	const original = await page.locator('#original-link').boundingBox();
-	const toolbar = await page.locator('#article-actions').boundingBox();
-	expect(original.y).toBeGreaterThanOrEqual(toolbar.y);
-	expect(original.y + original.height).toBeLessThanOrEqual(toolbar.y + toolbar.height);
-	await expect(page.locator('.article-menu')).toHaveCount(0);
-	const reachable = await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('#original-link')),
-		{ x: original.x + original.width / 2, y: original.y + original.height / 2 });
+	const original = await page.frameLocator('#article-frame').locator('h1 a').boundingBox();
+	const frame = await page.locator('#article-frame').boundingBox();
+	expect(original.y).toBeGreaterThanOrEqual(frame.y);
+	expect(original.y + original.height).toBeLessThanOrEqual(frame.y + frame.height);
+	await expect(page.locator('.article-menu, #original-link')).toHaveCount(0);
+	const reachable = await page.frameLocator('#article-frame').locator('h1 a').evaluate(node => {
+		const box = node.getBoundingClientRect();
+		return Boolean(node.ownerDocument.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('h1 a'));
+	});
 	expect(reachable).toBe(true);
 });

@@ -81,7 +81,8 @@ test('articles display images automatically and saved privacy settings block ext
 	await page.locator('.entry-card').first().click();
 	const frame = page.frameLocator('#article-frame');
 	await expect(frame.getByText('Isolation fixture')).toBeVisible();
-	await expect(frame.locator('script,iframe,form,input')).toHaveCount(0);
+	await expect(frame.locator('script:not([nonce]),iframe,form,input')).toHaveCount(0);
+	await expect(frame.locator('script[nonce]')).toHaveCount(1);
 	await expect(frame.locator('img')).toHaveCount(1);
 	await expect(frame.locator('img')).not.toHaveAttribute('onerror');
 	await expect(frame.getByText('unsafe', { exact: true })).not.toHaveAttribute('href');
@@ -159,7 +160,7 @@ test('mobile navigation, article focus and invalid numeric settings remain keybo
 	await expect(page.locator('#reader-sidebar')).toHaveJSProperty('inert', true);
 	const first = page.locator('.entry-card').first();
 	await first.focus(); await page.keyboard.press('Enter');
-	await expect(page.locator('#close-article')).toBeFocused();
+	await expect(page.locator('#article-pane')).toBeFocused();
 	await expect(page.locator('.article-list-pane')).toHaveJSProperty('inert', true);
 	await page.keyboard.press('Escape'); await expect(first).toBeFocused();
 	await page.locator('#open-settings').click();

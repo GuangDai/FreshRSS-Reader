@@ -67,6 +67,68 @@ async function continuousReader(page, reader, readerServer, { count = 150, mixed
 	return { requests, bodies, writes, items, handlers };
 }
 
+test('J/K keep working after clicking article text, including uppercase keys, without consuming search input', async ({ page, reader, readerServer }) => {
+	const { writes } = await continuousReader(page, reader, readerServer);
+	await page.locator('.entry-card').nth(15).click();
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 16');
+	await page.frameLocator('#article-frame').locator('p').first().evaluate(node => {
+		node.ownerDocument.defaultView.parent.postMessage({ type: 'reader-article', channel: 'wrong-channel', action: 'key', key: 'j' }, '*');
+	});
+	await page.evaluate(() => new Promise(resolve => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve))));
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 16');
+	await page.frameLocator('#article-frame').locator('p').first().click();
+	await page.keyboard.press('j');
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 17');
+	await page.frameLocator('#article-frame').locator('p').first().click();
+	await page.keyboard.press('Shift+K');
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 16');
+	await page.keyboard.press('Shift+J');
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 17');
+	await page.frameLocator('#article-frame').locator('p').first().click();
+	await page.keyboard.press('Escape');
+	await expect(page.locator('body')).toHaveAttribute('data-article-open', 'false');
+	const search = page.locator('#article-search input');
+	await search.focus(); await page.keyboard.type('jk ');
+	await expect(search).toHaveValue('jk ');
+	await expect(page.locator('body')).toHaveAttribute('data-article-open', 'false');
+	expect(writes).toHaveLength(0);
+});
+
+test('Space and Shift+Space scroll the article by a screen from reader focus and body focus', async ({ page, reader, readerServer }) => {
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	const { writes } = await continuousReader(page, reader, readerServer);
+	await page.locator('.entry-card').nth(15).click();
+	await expect(page.locator('#article-pane')).toBeFocused();
+	const frame = page.frameLocator('#article-frame');
+	await expect(frame.locator('p').first()).toBeVisible();
+	const scroll = () => frame.locator('html').evaluate(node => node.ownerDocument.scrollingElement.scrollTop);
+	const height = await frame.locator('html').evaluate(() => globalThis.innerHeight);
+	const listTop = await page.locator('#article-list').evaluate(node => node.scrollTop);
+	await page.keyboard.press('Space');
+	await expect.poll(scroll).toBeGreaterThan(height * 0.5);
+	expect(await scroll()).toBeLessThan(height * 1.1);
+	await page.keyboard.press('Shift+Space');
+	await expect.poll(scroll).toBeLessThan(2);
+	await frame.locator('p').first().click();
+	const beforeBodyScroll = await scroll();
+	await page.keyboard.press('Space');
+	await expect.poll(scroll).toBeGreaterThan(beforeBodyScroll + height * 0.5);
+	await page.keyboard.press('Shift+Space');
+	await expect.poll(async () => Math.abs(await scroll() - beforeBodyScroll)).toBeLessThan(2);
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 16');
+	expect(await page.locator('#article-list').evaluate(node => node.scrollTop)).toBeCloseTo(listTop, 0);
+	expect(writes).toHaveLength(0);
+});
+
+test('preloading covers eight following and three preceding articles without marking them read', async ({ page, reader, readerServer }) => {
+	const { bodies, writes } = await continuousReader(page, reader, readerServer);
+	await page.locator('.entry-card').nth(15).click();
+	await expect(page.locator('#article-frame')).toHaveAttribute('title', '连续阅读文章 16');
+	await expect.poll(() => bodies.includes('977') && bodies.includes('988')).toBe(true);
+	for (const id of ['984', '983', '982', '981', '980', '979', '978', '977', '986', '987', '988']) expect(bodies).toContain(id);
+	expect(writes).toHaveLength(0);
+});
+
 test('unread, all and starred combine with category, subscription and global scopes', async ({ page, reader, readerServer }) => {
 	const { requests } = await continuousReader(page, reader, readerServer, { count: 240, mixed: true });
 	await subscriptions(page); await page.locator('[data-filter=unread]').click();

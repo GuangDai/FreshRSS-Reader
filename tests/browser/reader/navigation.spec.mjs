@@ -142,7 +142,7 @@ test('mobile Back preserves the filtered page and scroll position, and Forward r
 	await expect(entry).toBeFocused();
 	await page.goForward();
 	await expectArticle(page, '63');
-	await expect(page.locator('#close-article')).toBeFocused();
+	await expect(page.locator('#article-pane')).toBeFocused();
 });
 
 test('J and K replace the current article without adding browser history entries', async ({ page }) => {

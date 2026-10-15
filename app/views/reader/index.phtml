@@ -84,12 +84,11 @@
 						<button type="button" id="mark-page-read" data-i18n="markPageReadShort" data-title="markPageRead"><?= $readerText('标为已读', 'Mark read') ?></button>
 						<button type="button" id="next-page"><?= $readerText('加载更多', 'Load more') ?></button></div>
 				</section>
-				<section class="article-pane" id="article-pane" aria-label="Article">
-					<div class="article-empty" id="article-empty"><p data-i18n="choose"><?= $readerText('选择一篇文章开始阅读', 'Choose an article to start reading') ?></p><small data-i18n="keyboard"><?= $readerText('焦点在阅读器控件时：J / K 切换文章 · M 已读 · S 收藏', 'With focus in the reader controls: J / K next / previous · M read · S star') ?></small></div>
+				<section class="article-pane" id="article-pane" aria-label="Article" tabindex="-1">
+					<div class="article-empty" id="article-empty"><p data-i18n="choose"><?= $readerText('选择一篇文章开始阅读', 'Choose an article to start reading') ?></p><small data-i18n="keyboard"><?= $readerText('J / K 切换文章 · 空格向下翻屏 · Shift + 空格向上翻屏 · M 已读 · S 收藏', 'J / K next / previous · Space scroll down · Shift + Space scroll up · M read · S star') ?></small></div>
 					<div class="article-actions" id="article-actions" hidden>
 						<div class="article-header">
 							<button type="button" id="close-article" data-title="close" aria-label="关闭文章"><span class="reader-icon icon-previous" aria-hidden="true"></span></button>
-							<a id="original-link" target="_blank" rel="noopener noreferrer" data-i18n="original">查看原文</a>
 						</div>
 						<div class="article-navigation" role="group" data-title="articleNavigation">
 							<button type="button" id="previous-article" data-title="previousArticle"><span class="reader-icon icon-previous" aria-hidden="true"></span><span class="action-label" data-i18n="previousArticle">上一篇</span></button>
@@ -99,7 +98,7 @@
 						</div>
 					</div>
 					<div id="article-status" class="status" role="status" hidden></div>
-					<iframe id="article-frame" title="文章正文" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" hidden></iframe>
+					<iframe id="article-frame" title="文章正文" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" hidden></iframe>
 				</section>
 			</div>
 		</main>
