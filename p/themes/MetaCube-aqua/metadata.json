@@ -1,0 +1,14 @@
+{
+	"name": "MetaCubeXD · Aqua",
+	"author": "FreshRSS contributors / daisyUI",
+	"description": "Aqua palette from MetaCubeXD (daisyUI 5.7.17), with a fixed dark appearance and a responsive FreshRSS layout.",
+	"version": "1.0.0",
+	"files": [
+		"_frss.css",
+		"../Origine/origine.css",
+		"../Calm/calm.css",
+		"../MetaCubeXD/common.css",
+		"theme.css"
+	],
+	"theme-color": "oklch(28% 0.091 267.935)"
+}

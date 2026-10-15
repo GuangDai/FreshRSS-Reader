@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use FreshRSS\Utils\Http\ApiInput;
+
 /**
 == Description ==
 Server-side API compatible with Google Reader API layer 2
@@ -78,17 +80,13 @@ final class GReaderAPI {
 
 	/** @return list<string> */
 	private static function multiplePosts(string $name): array {
-		//https://bugs.php.net/bug.php?id=51633
-		$inputs = explode('&', self::$ORIGINAL_INPUT);
-		$result = [];
-		$prefix = $name . '=';
-		$prefixLength = strlen($prefix);
-		foreach ($inputs as $input) {
-			if (str_starts_with($input, $prefix)) {
-				$result[] = urldecode(substr($input, $prefixLength));
-			}
+		try {
+			return ApiInput::formValues(self::$ORIGINAL_INPUT, $name, ApiInput::limits()['maxBatchItems']);
+		} catch (LengthException $exception) {
+			http_response_code(413);
+			header('Content-Type: application/json; charset=UTF-8');
+			exit(json_encode(['error' => $exception->getMessage()], JSON_OPTIONS));
 		}
-		return $result;
 	}
 
 	private static function debugInfo(): string {
@@ -1142,7 +1140,20 @@ TXT;
 			Minz_Translate::init();
 		}
 
-		self::$ORIGINAL_INPUT = file_get_contents('php://input', false, null, 0, 1048576) ?: '';
+		$input = fopen('php://input', 'rb');
+		if ($input === false) {
+			self::badRequest();
+		}
+		try {
+			ApiInput::checkRequestHeaders($_SERVER, ApiInput::limits()['maxRequestBytes']);
+			self::$ORIGINAL_INPUT = ApiInput::readBody($input, ApiInput::limits()['maxRequestBytes']);
+		} catch (LengthException | UnexpectedValueException $exception) {
+			http_response_code($exception instanceof LengthException ? 413 : 415);
+			header('Content-Type: application/json; charset=UTF-8');
+			exit(json_encode(['error' => $exception->getMessage()], JSON_OPTIONS));
+		} finally {
+			fclose($input);
+		}
 
 		if ($pathInfos[1] === 'accounts') {
 			if ($pathInfos[2] === 'ClientLogin') {
@@ -1175,7 +1186,9 @@ TXT;
 					$exclude_target = is_string($_GET['xt'] ?? null) ? $_GET['xt'] : '';
 					$filter_target = is_string($_GET['it'] ?? null) ? $_GET['it'] : '';
 					//n=[integer] : The maximum number of results to return.
-					$count = is_numeric($_GET['n'] ?? null) ? (int)$_GET['n'] : 20;
+					$limits = FreshRSS_Context::systemConf()->limits;
+					$count = ApiInput::pageSize($_GET['n'] ?? null,
+						($pathInfos[5] ?? '') === 'items' ? $limits['api_max_ids'] : $limits['api_max_entries']);
 					//r=[d|n|o] : Sort order of item results. d or n gives items in descending date order, o in ascending order.
 					$order = is_string($_GET['r'] ?? null) ? $_GET['r'] : 'd';
 					/**

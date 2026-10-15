@@ -1,0 +1,14 @@
+{
+	"name": "MetaCubeXD · Pastel",
+	"author": "FreshRSS contributors / daisyUI",
+	"description": "Pastel palette from MetaCubeXD (daisyUI 5.7.17), with a fixed light appearance and a responsive FreshRSS layout.",
+	"version": "1.0.0",
+	"files": [
+		"_frss.css",
+		"../Origine/origine.css",
+		"../Calm/calm.css",
+		"../MetaCubeXD/common.css",
+		"theme.css"
+	],
+	"theme-color": "oklch(98.462% 0.001 247.838)"
+}

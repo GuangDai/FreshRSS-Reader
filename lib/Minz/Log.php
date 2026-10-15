@@ -74,39 +74,65 @@ class Minz_Log {
 				syslog($level, '[' . $username . '] ' . trim($log));
 			}
 
-			self::ensureMaxLogSize($file_name);
-
-			if (file_put_contents($file_name, $log, FILE_APPEND | LOCK_EX) === false) {
-				throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
-			}
+			self::appendLog($file_name, $log);
 		}
 	}
 
 	/**
-	 * Make sure we do not waste a huge amount of disk space with old log messages.
-	 *
-	 * This method can be called multiple times for one script execution, but its result will not change unless
-	 * you call clearstatcache() in between. We won’t do do that for performance reasons.
-	 *
+	 * Inspect, rotate, and append under the same lock. fstat() avoids PHP's pathname stat cache.
 	 * @throws Minz_PermissionDeniedException
 	 */
-	protected static function ensureMaxLogSize(string $file_name): void {
-		$maxSize = defined('MAX_LOG_SIZE') ? MAX_LOG_SIZE : 1048576;
-		if ($maxSize > 0 && @filesize($file_name) > $maxSize) {
-			$fp = fopen($file_name, 'c+');
-			if (is_resource($fp) && flock($fp, LOCK_EX)) {
-				fseek($fp, -(int)($maxSize / 2), SEEK_END);
-				$content = fread($fp, $maxSize);
-				rewind($fp);
-				ftruncate($fp, 0);
-				fwrite($fp, $content ?: '');
-				fwrite($fp, sprintf("[%s] [notice] --- Log rotate.\n", date('r')));
-				fflush($fp);
-				flock($fp, LOCK_UN);
-			} else {
+	private static function appendLog(string $file_name, string $log): void {
+		$fp = fopen($file_name, 'c+b');
+		if (!is_resource($fp)) {
+			throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+		}
+		try {
+			if (!flock($fp, LOCK_EX)) {
 				throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
 			}
+			$stat = fstat($fp);
+			$maxSize = defined('MAX_LOG_SIZE') ? MAX_LOG_SIZE : 1048576;
+			if ($maxSize > 0 && is_array($stat) && $stat['size'] > $maxSize) {
+				$retainedBytes = (int)($maxSize / 2);
+				$content = '';
+				if ($retainedBytes > 0) {
+					if (fseek($fp, -$retainedBytes, SEEK_END) !== 0) {
+						throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+					}
+					$content = fread($fp, $retainedBytes);
+					if ($content === false) {
+						throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+					}
+					// Discard the first partial record rather than leaving an invalid log line.
+					$newline = strpos($content, "\n");
+					$content = $newline === false ? '' : substr($content, $newline + 1);
+				}
+				if (!rewind($fp) || !ftruncate($fp, 0)) {
+					throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+				}
+				self::writeLog($fp, $content . sprintf("[%s] [notice] --- Log rotate.\n", date('r')), $file_name);
+			}
+			if (fseek($fp, 0, SEEK_END) !== 0) {
+				throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+			}
+			self::writeLog($fp, $log, $file_name);
+			if (!fflush($fp)) {
+				throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+			}
+		} finally {
+			flock($fp, LOCK_UN);
 			fclose($fp);
+		}
+	}
+
+	/** @param resource $fp */
+	private static function writeLog($fp, string $content, string $file_name): void {
+		for ($offset = 0, $length = strlen($content); $offset < $length; $offset += $written) {
+			$written = fwrite($fp, substr($content, $offset));
+			if ($written === false || $written === 0) {
+				throw new Minz_PermissionDeniedException($file_name, Minz_Exception::ERROR);
+			}
 		}
 	}
 

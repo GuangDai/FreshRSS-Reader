@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Εγκατεστημένες',
 		'name' => 'Όνομα',
 		'no_configure_view' => 'Αυτή η επέκταση δεν μπορεί να ρυθμιστεί.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Επεκτάσεις συστήματος',
 			'no_rights' => 'Επέκταση συστήματος (δεν έχετε τα απαραίτητα δικαιώματα)',

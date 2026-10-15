@@ -15,6 +15,7 @@ parameters:
 			- lib/phpmailer/*
 			- lib/simplepie/*
 		analyseAndScan:
+			- bin/*
 			- .git/*?
 			- extensions/node_modules?
 			- extensions/symbolic?

@@ -251,49 +251,31 @@
 				</div>
 			</div>
 
-			<div class="form-group">
-				<label class="group-name" for="check_open_article"><?= _t('conf.reading.read.when') ?></label>
+			<fieldset class="form-group">
+				<legend class="group-name"><?= _t('conf.reading.read.when') ?></legend>
 				<div class="group-controls">
 					<label class="checkbox" for="check_open_article">
 						<input type="checkbox" name="mark_open_article" id="check_open_article" value="1"<?=
 							FreshRSS_Context::userConf()->mark_when['article'] ? ' checked="checked"' : '' ?> />
 						<?= _t('conf.reading.read.article_viewed') ?>
 					</label>
-				</div>
-			</div>
-
-			<div class="form-group">
-				<label class="group-name" for="check_open_site"><?= _t('conf.reading.read.when') ?></label>
-				<div class="group-controls">
 					<label class="checkbox" for="check_open_site">
 						<input type="checkbox" name="mark_open_site" id="check_open_site" value="1"<?=
 							FreshRSS_Context::userConf()->mark_when['site'] ? ' checked="checked"' : '' ?> />
 						<?= _t('conf.reading.read.article_open_on_website') ?>
 					</label>
-				</div>
-			</div>
-
-			<div class="form-group">
-				<label class="group-name" for="check_scroll"><?= _t('conf.reading.read.when') ?></label>
-				<div class="group-controls">
 					<label class="checkbox" for="check_scroll">
 						<input type="checkbox" name="mark_scroll" id="check_scroll" value="1"<?=
 							FreshRSS_Context::userConf()->mark_when['scroll'] ? ' checked="checked"' : '' ?> />
 						<?= _t('conf.reading.read.scroll') ?>
 					</label>
-				</div>
-			</div>
-
-			<div class="form-group">
-				<label class="group-name" for="check_focus"><?= _t('conf.reading.read.when') ?></label>
-				<div class="group-controls">
 					<label class="checkbox" for="check_focus">
 						<input type="checkbox" name="mark_focus" id="check_focus" value="1"<?=
 							FreshRSS_Context::userConf()->mark_when['focus'] ? ' checked="checked"' : '' ?>  />
 						<?= _t('conf.reading.read.focus') ?>
 					</label>
 				</div>
-			</div>
+			</fieldset>
 		</fieldset>
 
 		<fieldset>
@@ -308,8 +290,8 @@
 				</div>
 			</div>
 
-			<div class="form-group">
-				<label class="group-name" for="enable_read_when_same_title_in_feed"><?= _t('conf.reading.read.when') ?></label>
+			<fieldset class="form-group">
+				<legend class="group-name"><?= _t('conf.reading.read.when') ?></legend>
 				<div class="group-controls">
 					<label class="checkbox" for="enable_read_when_same_title_in_feed">
 						<input type="checkbox" name="enable_read_when_same_title_in_feed" id="enable_read_when_same_title_in_feed" value="1"<?=
@@ -319,30 +301,18 @@
 						<input type="number" id="read_when_same_title_in_feed" name="read_when_same_title_in_feed" min="0"
 							value="<?= $read_when_same_title_in_feed ?>" />
 					</label>
-				</div>
-			</div>
-
-			<div class="form-group">
-				<label class="group-name" for="mark_upon_reception"><?= _t('conf.reading.read.when') ?></label>
-				<div class="group-controls">
 					<label class="checkbox" for="mark_upon_reception">
 						<input type="checkbox" name="mark_upon_reception" id="mark_upon_reception" value="1"<?=
 							FreshRSS_Context::userConf()->mark_when['reception'] ? ' checked="checked"' : '' ?> />
 						<?= _t('conf.reading.read.upon_reception') ?>
 					</label>
-				</div>
-			</div>
-
-			<div class="form-group">
-				<label class="group-name" for="read_upon_gone"><?= _t('conf.reading.read.when') ?></label>
-				<div class="group-controls">
 					<label class="checkbox" for="read_upon_gone">
 						<input type="checkbox" name="read_upon_gone" id="read_upon_gone" value="1"<?=
 							FreshRSS_Context::userConf()->mark_when['gone'] ? ' checked="checked"' : '' ?> />
 						<?= _t('conf.reading.read.upon_gone') ?>
 					</label>
 				</div>
-			</div>
+			</fieldset>
 
 			<div class="form-group">
 				<label class="group-name" for="filteractions_read"><?= _t('conf.reading.read.when') ?></label>

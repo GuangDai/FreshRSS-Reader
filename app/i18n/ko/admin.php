@@ -35,6 +35,11 @@ return array(
 		'latest' => '설치됨',
 		'name' => '이름',
 		'no_configure_view' => '이 확장 기능은 설정이 없습니다.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => '시스템 확장 기능',
 			'no_rights' => '시스템 확장 기능 (이 확장 기능에 대한 권한이 없습니다)',

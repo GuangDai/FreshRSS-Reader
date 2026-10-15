@@ -8,6 +8,7 @@ declare(strict_types=1);
  * @phpstan-import-type ExtensionMetadata from Minz_Extension
  */
 final class Minz_ExtensionManager {
+	public const MAX_HOOK_ERROR_BYTES = 1024;
 
 	private static string $ext_metaname = 'metadata.json';
 	private static string $ext_entry_point = 'extension.php';
@@ -17,6 +18,17 @@ final class Minz_ExtensionManager {
 	private static array $ext_list_enabled = [];
 	/** @var array<string,bool> */
 	private static array $ext_auto_enabled = [];
+	/** @var array<string,string> Failures in this request; no persistent disable of user preferences. */
+	private static array $load_errors = [];
+	/** @var array<string,bool> */
+	private static array $hooks_sorted = [];
+	private static bool $observe_hooks = false;
+	/** @var array<string,string> First optional presentation error per hook and request. */
+	private static array $hook_errors = [];
+	/** @var array<string,array{calls:int,failures:int,duration_ns:int|float}> One aggregate per enum hook, never arguments or content. */
+	private static array $hook_metrics = [];
+	/** @var array<string,bool> */
+	private static array $enabling = [];
 
 	/**
 	 * List of available hooks. Please keep this list sorted.
@@ -27,6 +39,18 @@ final class Minz_ExtensionManager {
 	/** Remove extensions and hooks from a previous initialisation */
 	private static function reset(): void {
 		$hadAny = !empty(self::$ext_list_enabled);
+		foreach (self::$ext_list_enabled as $ext) {
+			if (is_callable([$ext, 'autoload'])) {
+				spl_autoload_unregister([$ext, 'autoload']);
+			}
+			$ext->disable();
+		}
+		self::$load_errors = [];
+		self::$enabling = [];
+		self::$hook_metrics = [];
+		self::$hook_errors = [];
+		self::$observe_hooks = false;
+		self::$hooks_sorted = [];
 		self::$ext_list = [];
 		self::$ext_list_enabled = [];
 		self::$ext_auto_enabled = [];
@@ -87,11 +111,16 @@ final class Minz_ExtensionManager {
 			if (!is_array($meta_json) || !self::isValidMetadata($meta_json)) {
 				// metadata.json is not a json file? Invalid!
 				// or metadata.json is invalid (no required information), invalid!
-				Minz_Log::warning('`' . $metadata_filename . '` is not a valid metadata file');
+				self::loadError(basename($ext_pathname), 'Invalid metadata.json');
 				continue;
 			}
 
 			$meta_json['path'] = $ext_pathname;
+			$error = self::compatibilityError($meta_json);
+			if ($error !== '') {
+				self::loadError($meta_json['name'], $error);
+				continue;
+			}
 
 			// Try to load extension itself
 			$extension = self::load($meta_json);
@@ -99,6 +128,7 @@ final class Minz_ExtensionManager {
 				self::register($extension);
 			}
 		}
+		self::enableByList(self::$ext_auto_enabled, 'system');
 	}
 
 	/**
@@ -114,8 +144,63 @@ final class Minz_ExtensionManager {
 	 * @return bool true if the array is valid, false else.
 	 */
 	private static function isValidMetadata(array $meta): bool {
-		$valid_chars = ['_'];
-		return !(empty($meta['name']) || empty($meta['entrypoint']) || !ctype_alnum(str_replace($valid_chars, '', $meta['entrypoint'])));
+		if (!is_string($meta['name'] ?? null) || trim($meta['name']) === '' ||
+			!is_string($meta['entrypoint'] ?? null) || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $meta['entrypoint']) !== 1) {
+			return false;
+		}
+		foreach (['author', 'description', 'min_php', 'min_freshrss', 'max_freshrss'] as $key) {
+			if (isset($meta[$key]) && !is_string($meta[$key])) {
+				return false;
+			}
+		}
+		if (isset($meta['requires'])) {
+			if (!is_array($meta['requires'])) {
+				return false;
+			}
+			foreach ($meta['requires'] as $name => $version) {
+				if (!is_string($name) || trim($name) === '' || !is_string($version) ||
+					($version !== '*' && preg_match('/^[0-9]+(?:[.][0-9A-Za-z-]+)*$/D', $version) !== 1)) {
+					return false;
+				}
+			}
+		}
+		foreach (['conflicts', 'capabilities'] as $key) {
+			if (!isset($meta[$key])) {
+				continue;
+			}
+			if (!is_array($meta[$key]) || !array_is_list($meta[$key])) {
+				return false;
+			}
+			foreach ($meta[$key] as $value) {
+				if (!is_string($value) || trim($value) === '') {
+					return false;
+				}
+			}
+		}
+		return (!isset($meta['configure_assets']) || is_bool($meta['configure_assets'])) &&
+			(!isset($meta['type']) || in_array($meta['type'], ['system', 'user'], true)) &&
+			(!isset($meta['version']) || is_scalar($meta['version']));
+	}
+
+	/** @param ExtensionMetadata $meta */
+	private static function compatibilityError(array $meta): string {
+		foreach (['min_php' => [PHP_VERSION, '>='], 'min_freshrss' => [FRESHRSS_VERSION, '>='],
+			'max_freshrss' => [FRESHRSS_VERSION, '<=']] as $key => [$current, $operator]) {
+			if (!empty($meta[$key]) && !version_compare($current, $meta[$key], $operator)) {
+				return $key . ': ' . $meta[$key] . ' (current: ' . $current . ')';
+			}
+		}
+		return '';
+	}
+
+	private static function loadError(string $name, string $message): void {
+		self::$load_errors[$name] = $message;
+		Minz_Log::warning('Extension ' . $name . ': ' . $message);
+	}
+
+	/** @return array<string,string> */
+	public static function getLoadErrors(): array {
+		return self::$load_errors;
 	}
 
 	/**
@@ -128,27 +213,24 @@ final class Minz_ExtensionManager {
 		$entry_point_filename = $info['path'] . '/' . self::$ext_entry_point;
 		$ext_class_name = $info['entrypoint'] . 'Extension';
 
-		include_once $entry_point_filename;
-
-		// Test if the given extension class exists.
-		if (!class_exists($ext_class_name)) {
-			Minz_Log::warning("`{$ext_class_name}` cannot be found in `{$entry_point_filename}`");
+		if (!is_readable($entry_point_filename)) {
+			self::loadError($info['name'], 'Missing or unreadable extension.php');
 			return null;
 		}
-
-		// Try to load the class.
-		$extension = null;
+		if (class_exists($ext_class_name, false) &&
+			(new ReflectionClass($ext_class_name))->getFileName() !== realpath($entry_point_filename)) {
+			self::loadError($info['name'], 'Duplicate entrypoint: ' . $info['entrypoint']);
+			return null;
+		}
 		try {
+			include_once $entry_point_filename;
+			if (!class_exists($ext_class_name, false) || !is_subclass_of($ext_class_name, Minz_Extension::class)) {
+				self::loadError($info['name'], $ext_class_name . ' must extend Minz_Extension');
+				return null;
+			}
 			$extension = new $ext_class_name($info);
-		} catch (Exception $e) {
-			// We cannot load the extension? Invalid!
-			Minz_Log::warning("Invalid extension `{$ext_class_name}`: " . $e->getMessage());
-			return null;
-		}
-
-		// Test if class is correct.
-		if (!($extension instanceof Minz_Extension)) {
-			Minz_Log::warning("`{$ext_class_name}` is not an instance of `Minz_Extension`");
+		} catch (Throwable $e) {
+			self::loadError($info['name'], $e->getMessage());
 			return null;
 		}
 
@@ -165,11 +247,51 @@ final class Minz_ExtensionManager {
 	 */
 	private static function register(Minz_Extension $ext): void {
 		$name = $ext->getName();
-		self::$ext_list[$name] = $ext;
-
-		if ($ext->getType() === 'system' && !empty(self::$ext_auto_enabled[$name])) {
-			self::enable($ext->getName(), 'system');
+		if (isset(self::$ext_list[$name])) {
+			self::loadError($name, 'Duplicate extension name: ' . basename($ext->getPath()));
+			return;
 		}
+		self::$ext_list[$name] = $ext;
+	}
+
+	/** Run installation and initialisation before the controller records an enabled preference.
+	 * Installation side effects belong to the extension; only manager-owned hooks are restored on failure.
+	 * @return true|string
+	 */
+	public static function installAndEnable(string $name): bool|string {
+		$extension = self::findExtension($name);
+		if ($extension === null) {
+			return 'Unknown extension: ' . $name;
+		}
+		if ($extension->isEnabled()) {
+			return true;
+		}
+		$error = self::getActivationError($name);
+		if ($error !== '') {
+			return $error;
+		}
+		$previousHooks = self::$hook_list;
+		$previousSorted = self::$hooks_sorted;
+		try {
+			$result = $extension->install();
+			if ($result !== true) {
+				self::$hook_list = $previousHooks;
+				self::$hooks_sorted = $previousSorted;
+				return $result;
+			}
+			self::enableByList([$name => true], $extension->getType());
+			if (!isset(self::$ext_list_enabled[$name])) {
+				self::$hook_list = $previousHooks;
+				self::$hooks_sorted = $previousSorted;
+				return self::$load_errors[$name] ?? 'Extension initialisation failed';
+			}
+		} catch (Throwable $error) {
+			self::$hook_list = $previousHooks;
+			self::$hooks_sorted = $previousSorted;
+			self::loadError($name, $error->getMessage());
+			return $error->getMessage();
+		}
+		return true;
 	}
 
 	/**
@@ -178,10 +300,11 @@ final class Minz_ExtensionManager {
 	 * The extension init() method will be called.
 	 *
 	 * @param string $ext_name is the name of a valid extension present in $ext_list.
+	 * @param array<string,bool> $requested
 	 * @param 'system'|'user'|null $onlyOfType only enable if the extension matches that type. Set to null to load all.
 	 */
-	private static function enable(string $ext_name, ?string $onlyOfType = null): void {
-		if (isset(self::$ext_list[$ext_name])) {
+	private static function enable(string $ext_name, ?string $onlyOfType = null, array $requested = []): void {
+		if (isset(self::$ext_list[$ext_name]) && !isset(self::$ext_list_enabled[$ext_name])) {
 			$ext = self::$ext_list[$ext_name];
 
 			if ($onlyOfType !== null && $ext->getType() !== $onlyOfType) {
@@ -189,16 +312,45 @@ final class Minz_ExtensionManager {
 				return;
 			}
 
+			if (isset(self::$enabling[$ext_name])) {
+				self::loadError($ext_name, 'Cyclic extension dependency');
+				return;
+			}
+			$error = self::getActivationError($ext_name, $requested);
+			if ($error !== '') {
+				self::loadError($ext_name, $error);
+				return;
+			}
+			unset(self::$load_errors[$ext_name]);
+			self::$enabling[$ext_name] = true;
+			foreach ($ext->getRequirements() as $dependency => $version) {
+				self::enable($dependency, $onlyOfType, $requested);
+				if (!self::isExtensionEnabled($dependency)) {
+					unset(self::$enabling[$ext_name]);
+					if (!isset(self::$load_errors[$ext_name])) {
+						self::loadError($ext_name, 'Dependency failed to initialise: ' . $dependency);
+					}
+					return;
+				}
+			}
+			unset(self::$enabling[$ext_name]);
+			unset(self::$load_errors[$ext_name]);
 			self::$ext_list_enabled[$ext_name] = $ext;
 
-			if (method_exists($ext, 'autoload')) {
+			$previousHooks = self::$hook_list;
+			if (is_callable([$ext, 'autoload'])) {
 				spl_autoload_register([$ext, 'autoload']);
 			}
 			$ext->enable();
 			try {
 				$ext->init();
-			} catch (Minz_Exception $e) {	// @phpstan-ignore catch.neverThrown (Thrown by extensions)
-				Minz_Log::warning('Error while enabling extension ' . $ext->getName() . ': ' . $e->getMessage());
+			} catch (Throwable $e) {
+				self::$hook_list = $previousHooks;
+				self::$hooks_sorted = [];
+				if (is_callable([$ext, 'autoload'])) {
+					spl_autoload_unregister([$ext, 'autoload']);
+				}
+				self::loadError($ext->getName(), $e->getMessage());
 				$ext->disable();
 				unset(self::$ext_list_enabled[$ext_name]);
 			}
@@ -215,9 +367,102 @@ final class Minz_ExtensionManager {
 		if (empty($ext_list)) {
 			return;
 		}
+		$requested = [];
 		foreach ($ext_list as $ext_name => $ext_status) {
-			if ($ext_status && is_string($ext_name)) {
-				self::enable($ext_name, $onlyOfType);
+			if ($ext_status && is_string($ext_name) && isset(self::$ext_list[$ext_name]) &&
+				($onlyOfType === null || self::$ext_list[$ext_name]->getType() === $onlyOfType)) {
+				$requested[$ext_name] = true;
+			}
+		}
+		foreach ($requested as $ext_name => $ext_status) {
+			self::enable($ext_name, $onlyOfType, $requested);
+		}
+	}
+
+	/**
+	 * Explain why an extension cannot be enabled. Dependencies must be explicitly selected or already enabled.
+	 * @param array<string,bool> $requested
+	 */
+	public static function getActivationError(string $name, array $requested = []): string {
+		$extension = self::findExtension($name);
+		if ($extension === null) {
+			return 'Unknown extension: ' . $name;
+		}
+		foreach ($extension->getRequirements() as $dependency => $version) {
+			$required = self::findExtension($dependency);
+			if ($required === null) {
+				return 'Missing dependency: ' . $dependency;
+			}
+			if ($extension->getType() === 'system' && $required->getType() !== 'system') {
+				return 'System extension requires user extension: ' . $dependency;
+			}
+			if ($version !== '*' && !version_compare($required->getVersion(), $version, '>=')) {
+				return 'Dependency requires version ' . $version . ': ' . $dependency;
+			}
+			if (!self::isExtensionEnabled($dependency) && empty($requested[$dependency])) {
+				return 'Dependency is disabled: ' . $dependency;
+			}
+		}
+		foreach (self::$ext_list as $otherName => $other) {
+			if ($otherName !== $name && (self::isExtensionEnabled($otherName) || !empty($requested[$otherName])) &&
+				(in_array($otherName, $extension->getConflicts(), true) || in_array($name, $other->getConflicts(), true))) {
+				return 'Conflicting extension: ' . $otherName;
+			}
+		}
+		return '';
+	}
+
+	/** @return list<string> Enabled dependants which prevent safe deactivation/removal. */
+	public static function getDependants(string $name): array {
+		$result = [];
+		foreach (self::$ext_list_enabled as $extension) {
+			if (array_key_exists($name, $extension->getRequirements())) {
+				$result[] = $extension->getName();
+			}
+		}
+		return $result;
+	}
+
+	/** @return array<string,string> */
+	public static function getHookErrors(): array {
+		return self::$hook_errors;
+	}
+
+	/** Request-local, bounded aggregates. Disabled by default; no hook payload is retained. */
+	public static function observeHooks(bool $enabled): void {
+		self::$observe_hooks = $enabled;
+		self::$hook_metrics = [];
+	}
+
+	/** @return array<string,array{calls:int,failures:int,duration_ns:int|float}> */
+	public static function getHookMetrics(): array {
+		return self::$hook_metrics;
+	}
+
+	/** @param array<int|string,mixed> $args */
+	private static function invokeHook(Minz_HookType $type, Minz_Hook $hook, array $args = []): mixed {
+		$start = self::$observe_hooks ? hrtime(true) : 0;
+		$failed = false;
+		try {
+			return ($hook->getFunction())(...$args);
+		} catch (Throwable $error) {
+			$failed = true;
+			// Only optional HTML additions are isolated. Mutating/filtering hooks preserve failure semantics.
+			if ($type->signature() !== Minz_HookSignature::NoneToString) {
+				throw $error;
+			}
+			if (!isset(self::$hook_errors[$type->value])) {
+				self::$hook_errors[$type->value] = substr($error->getMessage(), 0, self::MAX_HOOK_ERROR_BYTES);
+				Minz_Log::warning('Extension hook ' . $type->value . ': ' . self::$hook_errors[$type->value]);
+			}
+			return null;
+		} finally {
+			if ($start !== 0) {
+				$metrics = self::$hook_metrics[$type->value] ?? ['calls' => 0, 'failures' => 0, 'duration_ns' => 0];
+				$metrics['calls']++;
+				$metrics['failures'] += (int)$failed;
+				$metrics['duration_ns'] += hrtime(true) - $start;
+				self::$hook_metrics[$type->value] = $metrics;
 			}
 		}
 	}
@@ -266,6 +511,7 @@ final class Minz_ExtensionManager {
 		$hook_type_name = $hook_type->value;
 
 		if (is_callable($hook_function)) {
+			self::$hooks_sorted[$hook_type_name] = false;
 			self::$hook_list[$hook_type_name]['list'][] = new Minz_Hook(\Closure::fromCallable($hook_function), $priority);
 		}
 	}
@@ -287,10 +533,15 @@ final class Minz_ExtensionManager {
 	 * @return list<Minz_Hook>
 	 */
 	private static function retrieveHookList(Minz_HookType $hook_type): array {
-		$list = self::$hook_list[$hook_type->value]['list'] ?? [];
-		usort($list, static fn (Minz_Hook $a, Minz_Hook $b): int => $a->getPriority() <=> $b->getPriority());
-
-		return $list;
+		$name = $hook_type->value;
+		if (empty(self::$hook_list[$name]['list'])) {
+			return [];
+		}
+		if (empty(self::$hooks_sorted[$name])) {
+			usort(self::$hook_list[$name]['list'], static fn (Minz_Hook $a, Minz_Hook $b): int => $a->getPriority() <=> $b->getPriority());
+			self::$hooks_sorted[$name] = true;
+		}
+		return self::$hook_list[$name]['list'];
 	}
 
 	/**
@@ -312,7 +563,7 @@ final class Minz_ExtensionManager {
 			return self::callOneToOne($hook_type, $args[0] ?? null);
 		} elseif ($signature === Minz_HookSignature::PassArguments) {
 			foreach (self::retrieveHookList($hook_type) as $hook) {
-				$result = call_user_func($hook->getFunction(), ...$args);
+				$result = self::invokeHook($hook_type, $hook, $args);
 				if ($result !== null) {
 					return $result;
 				}
@@ -342,7 +593,7 @@ final class Minz_ExtensionManager {
 	private static function callOneToOne(Minz_HookType $hook_type, mixed $arg): mixed {
 		$result = $arg;
 		foreach (self::retrieveHookList($hook_type) as $hook) {
-			$result = call_user_func($hook->getFunction(), $arg);
+			$result = self::invokeHook($hook_type, $hook, [$arg]);
 
 			if ($result === null || $result === false) {
 				break;
@@ -369,7 +620,7 @@ final class Minz_ExtensionManager {
 
 		$result = '';
 		foreach (self::retrieveHookList($hook_type) as $hook) {
-			$return = call_user_func($hook->getFunction());
+			$return = self::invokeHook($hook_type, $hook);
 			if (is_scalar($return)) {
 				$result .= $return;
 			}
@@ -391,7 +642,7 @@ final class Minz_ExtensionManager {
 		}
 
 		foreach (self::retrieveHookList($hook_type) as $hook) {
-			call_user_func($hook->getFunction());
+			self::invokeHook($hook_type, $hook);
 		}
 	}
 
@@ -407,7 +658,7 @@ final class Minz_ExtensionManager {
 		}
 
 		foreach (self::retrieveHookList($hook_type) as $hook) {
-			call_user_func($hook->getFunction());
+			self::invokeHook($hook_type, $hook);
 			return true;
 		}
 		return false;

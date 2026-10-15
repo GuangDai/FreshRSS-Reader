@@ -3,6 +3,7 @@
 	<arg name="extensions" value="php,phtml"/>
 	<arg name="tab-width" value="4"/>
 	<exclude-pattern>/\.git/*</exclude-pattern>
+	<exclude-pattern>/bin/*</exclude-pattern>
 	<exclude-pattern>/data/config.php</exclude-pattern>
 	<exclude-pattern>/data/update.php</exclude-pattern>
 	<exclude-pattern>/data/users/*/config.php</exclude-pattern>

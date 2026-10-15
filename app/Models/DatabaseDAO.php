@@ -206,7 +206,7 @@ class FreshRSS_DatabaseDAO extends Minz_ModelPdo {
 		return [
 			'name' => is_string($dao['Field'] ?? null) ? $dao['Field'] : '',
 			'type' => is_string($dao['Type'] ?? null) ? strtolower($dao['Type']) : '',
-			'notnull' => empty($dao['Null']),
+			'notnull' => ($dao['Null'] ?? 'YES') === 'NO',
 			'default' => is_scalar($dao['Default'] ?? null) ? $dao['Default'] : null,
 		];
 	}
@@ -346,6 +346,11 @@ class FreshRSS_DatabaseDAO extends Minz_ModelPdo {
 				Minz_Log::error('SQL error ' . __METHOD__ . json_encode($this->pdo->errorInfo()));
 			}
 		}
+	}
+
+	/** Explicit maintenance only. InnoDB secondary indexes already include the article primary key. */
+	public function upgradeReaderIndexes(): bool {
+		return true;
 	}
 
 	private static function stdError(string $error): bool {

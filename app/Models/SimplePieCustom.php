@@ -21,29 +21,7 @@ final class FreshRSS_SimplePieCustom extends \SimplePie\SimplePie
 		$feed_timeout = empty($attributes['timeout']) || !is_numeric($attributes['timeout']) ? 0 : (int)$attributes['timeout'];
 		$this->set_timeout($feed_timeout > 0 ? $feed_timeout : $limits['timeout']);
 
-		$curl_options = array_replace(FreshRSS_Context::systemConf()->curl_options, $curl_options);
-		if (isset($attributes['ssl_verify'])) {
-			$curl_options[CURLOPT_SSL_VERIFYHOST] = empty($attributes['ssl_verify']) ? 0 : 2;
-			$curl_options[CURLOPT_SSL_VERIFYPEER] = (bool)$attributes['ssl_verify'];
-			if (empty($attributes['ssl_verify'])) {
-				$curl_options[CURLOPT_SSL_CIPHER_LIST] = 'DEFAULT@SECLEVEL=1';
-			}
-		}
-		$attributes['curl_params'] = FreshRSS_http_Util::sanitizeCurlParams(is_array($attributes['curl_params'] ?? null) ? $attributes['curl_params'] : []);
-		if (!empty($attributes['curl_params']) && is_array($attributes['curl_params'])) {
-			foreach ($attributes['curl_params'] as $co => $v) {
-				if (is_int($co)) {
-					$curl_options[$co] = $v;
-				}
-			}
-		}
-		if (!empty($curl_options[CURLOPT_PROXYTYPE]) && ($curl_options[CURLOPT_PROXYTYPE] < 0 || $curl_options[CURLOPT_PROXYTYPE] === 3)) {
-			// 3 is legacy for NONE
-			unset($curl_options[CURLOPT_PROXYTYPE]);
-			if (isset($curl_options[CURLOPT_PROXY])) {
-				unset($curl_options[CURLOPT_PROXY]);
-			}
-		}
+		$curl_options = FreshRSS_http_Util::mergeCurlOptions($attributes, $curl_options);
 		if (defined('CURLOPT_PROTOCOLS_STR') && is_int(CURLOPT_PROTOCOLS_STR)) {
 			$curl_options[CURLOPT_PROTOCOLS_STR] = 'http,https';
 			if (defined('CURLOPT_REDIR_PROTOCOLS_STR') && is_int(CURLOPT_REDIR_PROTOCOLS_STR)) {

@@ -1,0 +1,241 @@
+html.reader-settings-embedded {
+	--width-aside: 0px;
+	background: var(--reader-settings-surface, var(--background-color-light, #fff));
+	height: auto;
+	scroll-padding-block-end: 4rem;
+}
+
+html.reader-settings-embedded[style*="--reader-settings-surface"] {
+	--background-color-light: var(--reader-settings-surface);
+	--background-color-light-gradient1: var(--reader-settings-surface);
+	--background-color-light-gradient2: var(--reader-settings-surface);
+	--background-color-light-shadowed: var(--reader-settings-subtle, var(--reader-settings-surface));
+	--background-color-grey: var(--reader-settings-subtle, var(--reader-settings-surface));
+	--background-color-hover: color-mix(in srgb, var(--reader-settings-accent) 10%, var(--reader-settings-surface));
+	--font-color: var(--reader-settings-text);
+	--font-color-grey: var(--reader-settings-muted, var(--reader-settings-text));
+	--font-color-light-shadowed: var(--reader-settings-muted, var(--reader-settings-text));
+	--font-color-link: var(--reader-settings-accent);
+	--font-color-link-hover: var(--reader-settings-accent);
+	--font-color-light: var(--reader-settings-on-accent, var(--reader-settings-surface));
+	--border-color: var(--reader-settings-line);
+	--border-color-shadow-side: var(--reader-settings-line);
+	--contrast-background-color: var(--reader-settings-primary, var(--reader-settings-accent));
+	--contrast-background-color-gradient: var(--contrast-background-color);
+	--contrast-background-color-hover: var(--contrast-background-color);
+	--contrast-background-color-active: var(--contrast-background-color);
+	--contrast-border-color: var(--contrast-background-color);
+	--contrast-border-color-active: var(--contrast-background-color);
+	--contrast-background-font-color: var(--font-color-light);
+	--form-element-font-color-focus: var(--reader-settings-text);
+	--form-element-border-color-focus: var(--reader-settings-accent);
+	--form-element-focus-box-shadow-color-inset: transparent;
+	--form-element-border-color-invalid: var(--reader-settings-error, var(--reader-settings-accent));
+	--form-element-invalid-box-shadow-color-inset: transparent;
+	--alert-info-background-color: var(--background-color-hover);
+	--alert-info-font-color: var(--reader-settings-text);
+	--alert-info-border-color: var(--reader-settings-line);
+	--alert-success-background-color: var(--background-color-hover);
+	--alert-success-font-color: var(--reader-settings-text);
+	--alert-success-border-color: var(--reader-settings-line);
+	--alert-warn-background-color: color-mix(in srgb, #b58733 10%, var(--reader-settings-surface));
+	--alert-warn-font-color: var(--reader-settings-text);
+	--alert-warn-border-color: var(--reader-settings-line);
+	--alert-error-background-color: color-mix(in srgb, var(--reader-settings-error, var(--reader-settings-accent)) 10%, var(--reader-settings-surface));
+	--alert-error-font-color: var(--reader-settings-text);
+	--alert-error-border-color: var(--reader-settings-error, var(--reader-settings-line));
+	--notification-good-background-color: var(--alert-success-background-color);
+	--notification-good-font-color: var(--reader-settings-text);
+	--notification-good-border-color: var(--reader-settings-line);
+	--notification-bad-background-color: var(--alert-error-background-color);
+	--notification-bad-font-color: var(--reader-settings-text);
+	--notification-bad-border-color: var(--alert-error-border-color);
+	--notification-close-background-color-hover: var(--background-color-hover);
+	--frss-background-color: var(--reader-settings-surface);
+	--frss-background-color-middle: var(--background-color-grey);
+	--frss-font-color-dark: var(--reader-settings-text);
+	--frss-font-color-grey-dark: var(--font-color-grey);
+	--frss-font-color-grey-light: var(--font-color-grey);
+	--frss-font-color-disabled: var(--font-color-grey);
+	--frss-font-color-error: var(--form-element-border-color-invalid);
+	--frss-font-color-light: var(--font-color-light);
+	--frss-border-color: var(--reader-settings-line);
+	--frss-switch-accent-color: var(--reader-settings-accent);
+	--text-shadow-color: transparent;
+	--text-shadow-color-dark: transparent;
+	--box-shadow-color: transparent;
+	--box-shadow-color-inset: transparent;
+	--frss-box-shadow-color-transparent: transparent;
+}
+
+.reader-settings-embedded body {
+	margin: 0;
+	padding: 0;
+	background: var(--reader-settings-surface, var(--background-color-light, #fff));
+	height: auto;
+	color: var(--reader-settings-text, var(--font-color, #202124));
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	font-size: 14px;
+	line-height: 1.55;
+	min-height: 0;
+}
+
+.reader-settings-embedded :is(.header, .aside, .close-aside, .nav_mobile, #nav_menu, .nav_menu) {
+	display: none;
+}
+
+.reader-settings-embedded #global {
+	margin: 0;
+	padding: 0;
+	display: block;
+	width: 100%;
+	height: auto;
+	position: static;
+	min-height: 0;
+}
+
+.reader-settings-embedded .post {
+	margin: 0;
+	padding: var(--reader-settings-padding, 16px);
+	background: transparent;
+	float: none;
+	max-width: none;
+	width: auto;
+	border: 0;
+	box-shadow: none;
+	position: static;
+	min-width: 0;
+}
+
+.reader-settings-embedded .post > h1 {
+	display: none;
+}
+
+.reader-settings-embedded :is(form, fieldset, .group-controls, .box-content) {
+	min-width: 0;
+}
+
+.reader-settings-embedded :is(form, fieldset, .form-group, .alert) {
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.reader-settings-embedded .alert {
+	width: auto;
+}
+
+.reader-settings-embedded :is(.post > form, .post > fieldset) {
+	max-width: none;
+}
+
+.reader-settings-embedded .form-group {
+	margin: 0;
+	padding-block: 8px;
+	display: grid;
+	grid-template-columns: minmax(10rem, 30%) minmax(0, 1fr);
+	gap: 8px 24px;
+	align-items: start;
+}
+
+.reader-settings-embedded .form-group > :is(.group-name, .group-controls) {
+	margin: 0;
+	padding: 0;
+	float: none;
+	max-width: 100%;
+	width: auto;
+	text-align: start;
+	overflow-wrap: anywhere;
+}
+
+.reader-settings-embedded .form-group > .group-name {
+	font-weight: 600;
+}
+
+.reader-settings-embedded .form-group > .group-controls:only-child,
+.reader-settings-embedded .form-group > .group-controls:first-child {
+	grid-column: 1 / -1;
+}
+
+.reader-settings-embedded :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea) {
+	max-width: 100%;
+	min-height: 36px;
+	box-sizing: border-box;
+}
+
+.reader-settings-embedded :is(input, select, textarea, button, .btn) {
+	font: inherit;
+}
+
+.reader-settings-embedded[style*="--reader-settings-surface"] :is(input, select, textarea) {
+	color: var(--reader-settings-text);
+}
+
+.reader-settings-embedded[style*="--reader-settings-surface"] input:is([type="checkbox"], [type="radio"], [type="range"]) {
+	accent-color: var(--reader-settings-primary, var(--reader-settings-accent));
+}
+
+.reader-settings-embedded[style*="--reader-settings-surface"] .btn-attention {
+	background: var(--reader-settings-surface);
+	color: var(--reader-settings-error, var(--reader-settings-accent));
+	border-color: currentcolor;
+	text-shadow: none;
+}
+
+.reader-settings-embedded[style*="--reader-settings-surface"] .btn-attention:hover {
+	background: var(--alert-error-background-color);
+}
+
+.reader-settings-embedded .group-controls > :is(input, select, textarea) {
+	margin-block: 0;
+}
+
+.reader-settings-embedded .form-group.form-actions {
+	margin-block-start: 12px;
+	padding-block: 12px;
+	background: var(--reader-settings-surface, var(--background-color-light, #fff));
+	border-top: 1px solid var(--reader-settings-line, var(--border-color, #ddd));
+	box-shadow: none;
+	position: static;
+}
+
+.reader-settings-embedded .form-actions .group-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.reader-settings-embedded :is(.help, .alert, .group-controls p) {
+	max-width: 72ch;
+	overflow-wrap: anywhere;
+}
+
+.reader-settings-embedded :is(h2, h3, legend) {
+	text-wrap: balance;
+}
+
+.reader-settings-embedded :is(.table-wrapper, .rule-builder, .extraction-builder) {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.reader-settings-embedded :is(input, select, textarea, button, a):focus-visible {
+	outline: 2px solid var(--reader-settings-accent, var(--font-color-link, #276348));
+	outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+	.reader-settings-embedded .post {
+		padding: var(--reader-settings-padding, 8px);
+	}
+
+	.reader-settings-embedded .form-group {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 8px;
+	}
+
+	.reader-settings-embedded .form-group > .group-controls {
+		grid-column: 1;
+	}
+}

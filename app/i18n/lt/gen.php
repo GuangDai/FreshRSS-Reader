@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Paaukštinti',
 		'purge' => 'Išvalyti',
 		'refresh_opml' => 'Atnaujinti OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Pašalinti',
 		'rename' => 'Pervadinti',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Žiūrėti svetainę',
 		'submit' => 'Pateikti',
 		'truncate' => 'Ištrinti visus straipsnius',
@@ -193,6 +195,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: nauji straipsniai!',
 		),
 		'labels_empty' => 'Etikečių nėra',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Yra naujų straipsnių; spustelėkite, kad atnaujintumėte puslapį.',
 		'should_be_activated' => 'Turi būti įjungtas „JavaScript“',
 		'unsafe_csp_header' => 'Naudojama CSP antraštė yra nesaugi, ir FreshRSS gali būti pažeidžiama XSS atakų. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Žr. dokumentaciją</a>',

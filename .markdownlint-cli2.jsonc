@@ -25,6 +25,7 @@
 	],
 	"ignores": [
 		"**/node_modules/**",
+		"bin/**",
 		"extensions/**",
 		"lib/marienfressinaud/**",
 		"lib/phpgt/**",

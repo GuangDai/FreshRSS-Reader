@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Asennettu',
 		'name' => 'Nimi',
 		'no_configure_view' => 'Tätä laajennusta ei voi määrittää.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Järjestelmälaajennukset',
 			'no_rights' => 'Järjestelmälaajennus (sinulla ei ole tarvittavia käyttöoikeuksia)',

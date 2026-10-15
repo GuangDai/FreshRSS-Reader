@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Installiert',
 		'name' => 'Name',	// IGNORE
 		'no_configure_view' => 'Diese Erweiterung kann nicht konfiguriert werden.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'System-Erweiterungen',
 			'no_rights' => 'System-Erweiterung (Sie haben keine Berechtigung dafür)',

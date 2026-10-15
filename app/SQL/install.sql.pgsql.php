@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS `_is_read_index` ON `_entry` ("is_read");
 CREATE INDEX IF NOT EXISTS `_entry_lastSeen_index` ON `_entry` ("lastSeen");
 CREATE INDEX IF NOT EXISTS `_entry_last_modified_index` ON `_entry` ("lastModified");
 CREATE INDEX IF NOT EXISTS `_entry_last_user_modified_index` ON `_entry` ("lastUserModified");
-CREATE INDEX IF NOT EXISTS `_entry_feed_read_index` ON `_entry` ("id_feed","is_read");	-- v1.7
+CREATE INDEX IF NOT EXISTS `_entry_feed_read_index` ON `_entry` ("id_feed","is_read","id");
 
 INSERT INTO `_category` (id, name)
 	SELECT 1, 'Uncategorized'

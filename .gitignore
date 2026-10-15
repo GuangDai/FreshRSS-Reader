@@ -1,7 +1,11 @@
 /.htaccess
 /bin/
 /constants.local.php
+/.env
+/.env.*
+!/.env.example
 /data.back/
+/data/scheduler/
 /extensions/node_modules/
 /extensions/vendor/
 /node_modules/
@@ -32,3 +36,4 @@
 *.save
 *.autosav
 *.autosave
+__pycache__/

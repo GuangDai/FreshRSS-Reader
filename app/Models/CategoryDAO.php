@@ -21,7 +21,8 @@ class FreshRSS_CategoryDAO extends Minz_ModelPdo {
 
 	protected function addColumn(string $name): bool {
 		if ($this->pdo->inTransaction()) {
-			$this->pdo->commit();
+			Minz_Log::error(__METHOD__ . ': Cannot migrate the schema inside an active transaction');
+			return false;
 		}
 		Minz_Log::warning(__METHOD__ . ': ' . $name);
 		try {
@@ -135,13 +136,18 @@ class FreshRSS_CategoryDAO extends Minz_ModelPdo {
 		if (!isset($valuesTmp['attributes'])) {
 			$valuesTmp['attributes'] = [];
 		}
+		$attributes = is_string($valuesTmp['attributes']) ? $valuesTmp['attributes'] :
+			json_encode($valuesTmp['attributes'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		if ($attributes === false) {
+			Minz_Log::error(__METHOD__ . ': ' . json_last_error_msg());
+			return false;
+		}
 
 		if ($stm !== false &&
 			(empty($valuesTmp['id']) || $stm->bindValue(':id', $valuesTmp['id'], PDO::PARAM_INT)) &&
 			$stm->bindValue(':name1', $valuesTmp['name'], PDO::PARAM_STR) &&
 			$stm->bindValue(':kind', $valuesTmp['kind'] ?? FreshRSS_Category::KIND_NORMAL, PDO::PARAM_INT) &&
-			$stm->bindValue(':attributes', is_string($valuesTmp['attributes']) ? $valuesTmp['attributes'] :
-				json_encode($valuesTmp['attributes'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), PDO::PARAM_STR) &&
+			$stm->bindValue(':attributes', $attributes, PDO::PARAM_STR) &&
 			$stm->bindValue(':name2', $valuesTmp['name'], PDO::PARAM_STR) &&
 			$stm->execute() && $stm->rowCount() > 0) {
 			if (empty($valuesTmp['id'])) {
@@ -191,12 +197,17 @@ class FreshRSS_CategoryDAO extends Minz_ModelPdo {
 		if (empty($valuesTmp['attributes'])) {
 			$valuesTmp['attributes'] = [];
 		}
+		$attributes = is_string($valuesTmp['attributes']) ? $valuesTmp['attributes'] :
+			json_encode($valuesTmp['attributes'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		if ($attributes === false) {
+			Minz_Log::error(__METHOD__ . ': ' . json_last_error_msg());
+			return false;
+		}
 
 		if ($stm !== false &&
 			$stm->bindValue(':name', $valuesTmp['name'], PDO::PARAM_STR) &&
 			$stm->bindValue(':kind', $valuesTmp['kind'] ?? FreshRSS_Category::KIND_NORMAL, PDO::PARAM_INT) &&
-			$stm->bindValue(':attributes', is_string($valuesTmp['attributes']) ? $valuesTmp['attributes'] :
-				json_encode($valuesTmp['attributes'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), PDO::PARAM_STR) &&
+			$stm->bindValue(':attributes', $attributes, PDO::PARAM_STR) &&
 			$stm->bindValue(':id', $id, PDO::PARAM_INT) &&
 			$stm->bindValue(':name2', $valuesTmp['name'], PDO::PARAM_STR) &&
 			$stm->execute()) {

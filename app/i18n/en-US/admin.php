@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Installed',	// IGNORE
 		'name' => 'Name',	// IGNORE
 		'no_configure_view' => 'This extension cannot be configured.',	// IGNORE
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// IGNORE
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// IGNORE
+			'secret_keep' => 'Leave blank to keep the saved value.',	// IGNORE
+		),
 		'system' => array(
 			'_' => 'System extensions',	// IGNORE
 			'no_rights' => 'System extension (you do not have the required permissions)',	// IGNORE

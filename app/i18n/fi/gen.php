@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Nosta tärkeyttä',
 		'purge' => 'Tyhjennä',
 		'refresh_opml' => 'Päivitä OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Poista',
 		'rename' => 'Nimeä uudelleen',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Siirry sivustolle',
 		'submit' => 'Lähetä',
 		'truncate' => 'Poista kaikki artikkelit',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: uusia artikkeleita!',
 		),
 		'labels_empty' => 'Ei tunnisteita',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Uusia artikkeleita on saatavilla. Päivitä sivu napsauttamalla.',
 		'should_be_activated' => 'JavaScriptin on oltava käytössä',
 		'unsafe_csp_header' => 'Käytössä oleva CSP-otsikko on turvaton, ja FreshRSS saattaa olla altis XSS-hyökkäyksille. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Lisätietoja ohjeessa</a>',

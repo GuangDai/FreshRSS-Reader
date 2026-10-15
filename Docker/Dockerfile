@@ -9,7 +9,7 @@ RUN apt-get update && \
 	ca-certificates cron \
 	apache2 libapache2-mod-php \
 	libapache2-mod-auth-openidc \
-	php-curl php-gmp php-intl php-mbstring php-xml php-zip \
+	php-cli php-curl php-gmp php-intl php-mbstring php-xml php-zip \
 	php-sqlite3 php-mysql php-pgsql && \
 	rm -rf /var/lib/apt/lists/*
 
@@ -18,18 +18,23 @@ WORKDIR /var/www/FreshRSS
 
 COPY --chown=root:www-data . /var/www/FreshRSS
 COPY ./Docker/*.Apache.conf /etc/apache2/sites-available/
+COPY ./Docker/production/php.ini /etc/php/8.4/apache2/conf.d/99-reader-budget.ini
+COPY ./Docker/production/php.ini /etc/php/8.4/cli/conf.d/99-reader-budget.ini
+COPY ./Docker/production/php-cli.ini /etc/php/8.4/cli/conf.d/zz-reader-cli.ini
+COPY ./Docker/production/apache.conf /etc/apache2/mods-available/mpm_prefork.conf
+COPY ./Docker/production/config.custom.php /etc/freshrss/config.custom.php
 
 ARG FRESHRSS_VERSION
 ARG SOURCE_COMMIT
 
 LABEL \
-	org.opencontainers.image.description="A self-hosted RSS feed aggregator" \
-	org.opencontainers.image.documentation="https://freshrss.github.io/FreshRSS/" \
+	org.opencontainers.image.description="FreshRSS with an independent reader and durable feed refresh scheduler" \
+	org.opencontainers.image.documentation="https://github.com/guangdai/freshrss-reader/blob/main/docs/zh-CN/development/deployment.md" \
 	org.opencontainers.image.licenses="AGPL-3.0" \
 	org.opencontainers.image.revision="${SOURCE_COMMIT}" \
-	org.opencontainers.image.source="https://github.com/FreshRSS/FreshRSS" \
-	org.opencontainers.image.title="FreshRSS" \
-	org.opencontainers.image.url="https://freshrss.org/" \
+	org.opencontainers.image.source="https://github.com/guangdai/freshrss-reader" \
+	org.opencontainers.image.title="FreshRSS Reader" \
+	org.opencontainers.image.url="https://github.com/guangdai/freshrss-reader" \
 	org.opencontainers.image.vendor="FreshRSS" \
 	org.opencontainers.image.version="$FRESHRSS_VERSION"
 
@@ -47,6 +52,8 @@ RUN \
 	a2ensite -q 'FreshRSS*' && \
 	# Disable unwanted PHP modules
 	phpdismod calendar exif ffi ftp gettext mysqli posix readline shmop sockets sysvmsg sysvsem sysvshm xsl && \
+	# Debian's CLI package has PCNTL built in; fail the build if scheduling cannot launch workers.
+	php -r 'foreach (["proc_open", "pcntl_alarm", "pcntl_signal"] as $function) { if (!function_exists($function)) { fwrite(STDERR, "Missing scheduler function: $function\n"); exit(1); } }' && \
 	# Disable built-in FreshRSS updates when using Docker, as the full image is supposed to be updated instead
 	sed -r -i "\\#disable_update#s#^.*#\t'disable_update' => true,#" ./config.default.php && \
 	# Configure cron job
@@ -64,6 +71,9 @@ ENV FRESHRSS_ENV=''
 ENV LISTEN=''
 ENV OIDC_ENABLED=''
 ENV TRUSTED_PROXY=''
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+	CMD ["php", "Docker/healthcheck.php"]
 
 ENTRYPOINT ["./Docker/entrypoint.sh"]
 

@@ -1,0 +1,4 @@
+# Native modules are independently revalidated after an update.
+<IfModule mod_headers.c>
+	Header set Cache-Control "no-cache"
+</IfModule>

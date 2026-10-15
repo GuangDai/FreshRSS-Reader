@@ -48,6 +48,24 @@ function actualize_mutex_file(string $tmpPath, string $dataPath): string {
 }
 
 /**
+ * Keep the returned handle alive for the entire run. Never unlink a flock file:
+ * another process could still hold the old inode while a third locks a new one.
+ * @return resource|false
+ * @throws RuntimeException
+ */
+function actualize_acquire_lock(string $path) {
+	$handle = @fopen($path, 'c');
+	if ($handle === false) {
+		throw new RuntimeException('Cannot open actualisation lock: ' . $path);
+	}
+	if (!flock($handle, LOCK_EX | LOCK_NB)) {
+		fclose($handle);
+		return false;
+	}
+	return $handle;
+}
+
+/**
  * Disable stream wrappers that the application does not need.
  *
  * For temporary usage of a previously unregistered wrapper, `stream_wrapper_restore()` can be used.
@@ -68,6 +86,13 @@ if (!defined('WITH_COMPOSER')) {
 
 //<Auto-loading>
 function classAutoloader(string $class): void {
+	if (str_starts_with($class, 'FreshRSS\\')) {
+		$path = APP_PATH . '/' . str_replace('\\', '/', substr($class, strlen('FreshRSS\\'))) . '.php';
+		if (is_file($path)) {
+			include $path;
+		}
+		return;
+	}
 	if (str_starts_with($class, 'FreshRSS')) {
 		$components = explode('_', $class);
 		switch (count($components)) {
@@ -320,16 +345,22 @@ function sensitive_log(array|string $log): array|string {
 	return $log;
 }
 
-function cleanCache(int $hours = 720): void {
-	// N.B.: GLOB_BRACE is not available on all platforms
-	$files = glob(CACHE_PATH . '/*.*', GLOB_NOSORT) ?: [];
-	foreach ($files as $file) {
-		if (str_ends_with($file, 'index.html')) {
+function cleanCache(int $hours = 720, string $path = CACHE_PATH): void {
+	if (!is_dir($path)) {
+		return;
+	}
+	$cutoff = time() - 3600 * max(0, $hours);
+	// Iterate instead of allocating an array containing every cache filename.
+	foreach (new DirectoryIterator($path) as $file) {
+		$name = $file->getFilename();
+		if ($name[0] === '.' || !str_contains($name, '.') || str_ends_with($name, 'index.html') ||
+			$file->isLink() || !$file->isFile()) {
 			continue;
 		}
-		$cacheMtime = @filemtime($file);
-		if ($cacheMtime !== false && $cacheMtime < time() - (3600 * $hours)) {
-			unlink($file);
+		$filename = $file->getPathname();
+		$cacheMtime = @filemtime($filename);
+		if ($cacheMtime !== false && $cacheMtime < $cutoff) {
+			FreshRSS_http_Util::removeExpiredCacheFile($filename, $cutoff);
 		}
 	}
 }

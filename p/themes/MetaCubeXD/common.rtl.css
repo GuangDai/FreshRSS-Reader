@@ -1,0 +1,298 @@
+/* Shared FreshRSS mapping for MetaCubeXD's daisyUI 5.7.17 palettes.
+ * Original tokens live in each theme.css; MIT licence: ../../styles/vendor/daisyui-LICENSE.
+ * Match the auto selector so inherited dark media rules cannot change a fixed palette.
+ */
+
+:root,
+:root.darkMode_auto {
+	--classic-muted: color-mix(in srgb, var(--color-base-content) 85%, var(--color-base-100));
+	--classic-link: color-mix(in srgb, var(--color-primary) 20%, var(--color-base-content));
+	--classic-border: color-mix(in srgb, var(--color-base-content) 38%, var(--color-base-100));
+	--classic-soft: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+	--classic-hover: color-mix(in srgb, var(--color-primary) 16%, var(--color-base-100));
+	--classic-error: color-mix(in srgb, var(--color-error) 35%, var(--color-base-content));
+	--classic-warning: color-mix(in srgb, var(--color-warning) 30%, var(--color-base-content));
+	--frss-background-color: var(--color-base-100);
+	--frss-background-color-transparent: color-mix(in srgb, var(--color-base-100) 88%, transparent);
+	--frss-background-color-middle: var(--color-base-200);
+	--frss-background-color-dark: var(--color-base-300);
+	--frss-background-color-error-transparent: color-mix(in srgb, var(--color-error) 12%, transparent);
+	--frss-font-color-dark: var(--color-base-content);
+	--frss-font-color-grey-dark: var(--classic-muted);
+	--frss-font-color-grey-light: var(--classic-muted);
+	--frss-font-color-light: var(--classic-primary-content);
+	--frss-font-color-disabled: var(--classic-muted);
+	--frss-font-color-error: var(--classic-error);
+	--frss-border-color: var(--classic-border);
+	--frss-border-color-error: var(--classic-error);
+	--frss-switch-accent-color: var(--color-success);
+	--frss-dragdrop-color: var(--color-primary);
+	--frss-dragdrop-color-transparent: var(--classic-soft);
+	--frss-noThumbnailImage-background-color: var(--color-base-200);
+	--frss-darken-background-hover-transparent: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+	--frss-modal-background-color-transparent: color-mix(in srgb, var(--color-neutral) 70%, transparent);
+	--frss-box-shadow-color-transparent: color-mix(in srgb, var(--color-neutral) 18%, transparent);
+	--frss-scrollbar-handle: color-mix(in srgb, var(--color-base-content) 35%, transparent);
+	--frss-scrollbar-handle-hover: color-mix(in srgb, var(--color-base-content) 55%, transparent);
+	--frss-scrollbar-track: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+	--frss-scrollbar-track-hover: color-mix(in srgb, var(--color-base-content) 12%, transparent);
+	--background-color-light-gradient1: var(--color-base-100);
+	--background-color-light-gradient2: var(--color-base-100);
+	--background-color-light: var(--color-base-100);
+	--background-color-light-shadowed: var(--color-base-200);
+	--background-color-light-shadowed-transparent: var(--color-base-200);
+	--background-color-grey: var(--color-base-200);
+	--background-color-hover: var(--classic-hover);
+	--unread-article-background-color: var(--color-base-100);
+	--unread-article-background-color-hover: var(--classic-soft);
+	--unread-article-border-color: var(--classic-link);
+	--favorite-article-background-color: color-mix(in srgb, var(--color-secondary) 8%, var(--color-base-100));
+	--favorite-article-background-color-hover: color-mix(in srgb, var(--color-secondary) 14%, var(--color-base-100));
+	--favorite-article-border-color: var(--color-secondary);
+	--contrast-background-color: var(--color-primary);
+	--contrast-background-color-gradient: var(--color-primary);
+	--contrast-background-color-hover: var(--color-primary);
+	--contrast-background-color-active: var(--color-primary);
+	--contrast-border-color: var(--color-primary);
+	--contrast-border-color-active: var(--color-primary);
+	--contrast-background-font-color: var(--classic-primary-content);
+	--attention-background-color-gradient1: var(--color-error);
+	--attention-background-color-gradient2: var(--color-error);
+	--attention-background-color-gradient1-hover: var(--color-error);
+	--attention-background-color-gradient2-hover: var(--color-error);
+	--attention-background-color-active: var(--color-error);
+	--attention-border-color: var(--color-error);
+	--empty-feed-color: var(--classic-warning);
+	--error-feed-color: var(--classic-error);
+	--alert-warn-background-color: color-mix(in srgb, var(--color-warning) 12%, var(--color-base-100));
+	--alert-warn-font-color: var(--color-base-content);
+	--alert-warn-border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-base-content));
+	--alert-info-background-color: color-mix(in srgb, var(--color-info) 12%, var(--color-base-100));
+	--alert-info-font-color: var(--color-base-content);
+	--alert-info-border-color: color-mix(in srgb, var(--color-info) 40%, var(--color-base-content));
+	--alert-success-background-color: color-mix(in srgb, var(--color-success) 12%, var(--color-base-100));
+	--alert-success-font-color: var(--color-base-content);
+	--alert-success-border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-base-content));
+	--alert-error-background-color: color-mix(in srgb, var(--color-error) 12%, var(--color-base-100));
+	--alert-error-font-color: var(--color-base-content);
+	--alert-error-border-color: color-mix(in srgb, var(--color-error) 40%, var(--color-base-content));
+	--notification-good-background-color: var(--alert-success-background-color);
+	--notification-good-border-color: var(--alert-success-border-color);
+	--notification-good-font-color: var(--color-base-content);
+	--notification-bad-background-color: var(--alert-error-background-color);
+	--notification-bad-font-color: var(--color-base-content);
+	--notification-bad-border-color: var(--alert-error-border-color);
+	--notification-close-background-color-hover: var(--classic-hover);
+	--font-color: var(--color-base-content);
+	--font-color-grey: var(--classic-muted);
+	--font-color-light-shadowed: var(--classic-muted);
+	--font-color-light: var(--classic-primary-content);
+	--text-shadow-color: transparent;
+	--text-shadow-color-dark: transparent;
+	--box-shadow-color: var(--frss-box-shadow-color-transparent);
+	--box-shadow-color-inset: transparent;
+	--font-color-link: var(--classic-link);
+	--font-color-link-hover: var(--color-base-content);
+	--border-color: var(--classic-border);
+	--border-color-shadow-side: var(--classic-border);
+	--form-element-font-color-focus: var(--color-base-content);
+	--form-element-border-color-focus: var(--classic-link);
+	--form-element-focus-box-shadow-color-inset: transparent;
+	--form-element-border-color-invalid: var(--classic-error);
+	--form-element-invalid-box-shadow-color-inset: transparent;
+}
+
+::selection {
+	background: var(--color-primary);
+	color: var(--classic-primary-content);
+}
+
+.btn,
+:root.darkMode_auto .nav_menu .btn {
+	color: var(--classic-muted);
+}
+
+.header .search input,
+input[type="search"],
+input[type="text"],
+input[type="password"],
+select,
+textarea,
+.btn {
+	border-radius: var(--radius-field);
+}
+
+.stick .btn:first-child,
+.group .btn:first-child,
+.stick input:first-child,
+.stick select:first-child {
+	border-radius: 0 var(--radius-field) var(--radius-field) 0;
+}
+
+.stick .btn:last-child,
+.group .btn:last-child,
+.stick input:last-child {
+	border-radius: var(--radius-field) 0 0 var(--radius-field);
+}
+
+.group > .btn:only-child,
+.group > .dropdown:only-child > .btn {
+	border-radius: var(--radius-field);
+}
+
+.aside_feed .tree-folder-items > .item {
+	border-radius: var(--radius-selector);
+}
+
+.dropdown-menu,
+.notification {
+	border-radius: var(--radius-box);
+}
+
+.btn,
+input,
+select,
+textarea {
+	border-width: var(--border);
+}
+
+.btn.btn-important,
+.btn.btn-important:is(:hover, :active),
+:root.darkMode_auto .nav_menu .btn.btn-important {
+	background: var(--color-primary);
+	color: var(--classic-primary-content);
+	border-color: var(--color-primary);
+	filter: none;
+}
+
+.btn.btn-attention,
+.btn.btn-attention:is(:hover, :active) {
+	background: var(--color-error);
+	color: var(--classic-error-content);
+	border-color: var(--color-error);
+	filter: none;
+}
+
+.btn.btn-important:focus-visible {
+	outline-color: var(--classic-primary-content);
+}
+
+.btn.btn-attention:focus-visible {
+	outline-color: var(--classic-error-content);
+}
+
+.btn:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+textarea:focus-visible {
+	outline-width: 2px;
+}
+
+.aside_feed .tree-folder.active > .tree-folder-title .title,
+.aside_feed .tree-folder-items > .item.active > a,
+.pagination .item.active {
+	color: var(--classic-primary-content);
+}
+
+.aside_feed .tree-folder.active > .tree-folder-title .title::after,
+.aside_feed .tree-folder-items > .item.active .item-title::after {
+	background: transparent;
+	color: var(--classic-primary-content);
+}
+
+.aside_feed .tree-folder-items > .feed.item.empty.active .item-title::after {
+	color: var(--classic-warning-content);
+}
+
+.aside_feed .tree-folder-items > .feed.item.error.active .item-title::after {
+	color: var(--classic-error-content);
+}
+
+.feed.item.empty.active,
+.feed.item.empty.active > a {
+	background: var(--color-warning);
+	color: var(--classic-warning-content);
+}
+
+.feed.item.error.active,
+.feed.item.error.active > a {
+	background: var(--color-error);
+	color: var(--classic-error-content);
+}
+
+:root.darkMode_auto .nav_menu {
+	background: var(--color-base-200);
+}
+
+:root.darkMode_auto .nav_menu .btn.active,
+:root.darkMode_auto .nav_menu .btn:active,
+:root.darkMode_auto .nav_menu .dropdown-target:target ~ .btn.dropdown-toggle {
+	background: var(--classic-hover);
+}
+
+:root.darkMode_auto .dropdown-menu {
+	background: var(--color-base-100);
+}
+
+:root.darkMode_auto .header {
+	background: var(--color-base-200);
+}
+
+/* Neutralise Origine's hard-coded light icons so every fixed palette works in either OS scheme. */
+.icon,
+.btn .icon,
+.btn:is(:hover, :active, .active) .icon,
+.aside_feed .tree-folder.active .icon,
+.aside_feed .tree-folder-items > .item.active .icon,
+:root.darkMode_auto .btn:is(:active, .active) .icon {
+	filter: var(--classic-icon-filter);
+	opacity: 0.75;
+}
+
+#toggle-search.active > .icon {
+	filter: var(--classic-icon-filter);
+}
+
+.btn-important .icon,
+.btn-important:is(:hover, :active) .icon,
+.dropdown-menu .item:is(:hover, :focus-within) .icon,
+:root.darkMode_auto .btn-important .icon,
+:root.darkMode_auto .btn-important:is(:hover, :active, .active) .icon,
+.aside_feed .tree-folder.active > .tree-folder-title .icon,
+.aside_feed .tree-folder-items > .item.active > a .icon {
+	filter: var(--classic-primary-icon-filter);
+}
+
+.aside_feed .tree-folder-items > .feed.item.empty.active > a .icon {
+	filter: var(--classic-warning-icon-filter);
+}
+
+.aside_feed .tree-folder-items > .feed.item.error.active > a .icon,
+.btn-attention .icon,
+.btn-attention:is(:hover, :active) .icon,
+:root.darkMode_auto .btn-attention .icon,
+:root.darkMode_auto .btn-attention:is(:hover, :active, .active) .icon {
+	filter: var(--classic-error-icon-filter);
+}
+
+/* The spinner remains a real SVG; its filter follows the theme rather than system media. */
+.spinner,
+:root.darkMode_auto .spinner {
+	filter: var(--classic-icon-filter);
+}
+
+@media (forced-colors: active) {
+	.btn.btn-important,
+	.btn.btn-attention,
+	.aside_feed .tree-folder.active > .tree-folder-title .title,
+	.aside_feed .tree-folder-items > .item.active > a {
+		color: ButtonText;
+	}
+
+	.btn.btn-important:focus-visible,
+	.btn.btn-attention:focus-visible {
+		outline-color: Highlight;
+	}
+}

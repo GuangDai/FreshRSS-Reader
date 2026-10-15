@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Promosi',
 		'purge' => 'Hapus',
 		'refresh_opml' => 'Segarkan OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Hapus',
 		'rename' => 'Ubah nama',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Lihat situs',
 		'submit' => 'Kirim',
 		'truncate' => 'Hapus semua artikel',
@@ -177,6 +179,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: artikel baru!',
 		),
 		'labels_empty' => 'Tidak ada label',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Tidak ada artikel baru yang tersedia, klik untuk menyegarkan halaman.',
 		'should_be_activated' => 'JavaScript harus diaktifkan',
 		'unsafe_csp_header' => 'Header CSP yang digunakan tidak aman dan FreshRSS mungkin rentan terhadap serangan XSS. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Lihat dokumentasi</a>',

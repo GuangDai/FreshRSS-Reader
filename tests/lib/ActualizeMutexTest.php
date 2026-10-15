@@ -32,4 +32,21 @@ final class ActualizeMutexTest extends \PHPUnit\Framework\TestCase {
 			recursive_unlink($testPath);
 		}
 	}
+	public function testLockLivesUntilTheHandleClosesRegardlessOfFileAge(): void {
+		$path = tempnam(sys_get_temp_dir(), 'freshrss-lock-');
+		self::assertIsString($path);
+		$first = actualize_acquire_lock($path);
+		self::assertIsResource($first);
+		try {
+			touch($path, time() - 86400);
+			self::assertFalse(actualize_acquire_lock($path));
+		} finally {
+			fclose($first);
+		}
+		$next = actualize_acquire_lock($path);
+		self::assertIsResource($next);
+		fclose($next);
+		unlink($path);
+	}
+
 }

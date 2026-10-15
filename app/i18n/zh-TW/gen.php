@@ -44,8 +44,10 @@ return array(
 		'promote' => '升級為管理員',
 		'purge' => '清理',
 		'refresh_opml' => '刷新 OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => '移除',
 		'rename' => '重新命名',
+		'retry' => 'Retry',	// TODO
 		'see_website' => '查看網站',
 		'submit' => '提交',
 		'truncate' => '刪除所有文章',
@@ -179,6 +181,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: 新文章！',
 		),
 		'labels_empty' => '無標籤',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => '有新文章可用，點擊以刷新頁面。',
 		'should_be_activated' => '必須啟用 JavaScript',
 		'unsafe_csp_header' => '目前使用的 CSP 標頭不安全，FreshRSS 可能會受到 XSS 攻擊。<a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">請參閱說明文件</a>',

@@ -89,7 +89,7 @@ vendor/bin/phpunit vendor/bin/phpcs vendor/bin/phpcbf vendor/bin/phpstan &: bin/
 # Any of these depend on the vendor/ target, and then symlink the vendor/bin/ to the bin/.
 # use -sf so if the symlink already exists it won't error out. Running this from a container often won't properly detect it already exists
 bin/phpunit bin/phpcs bin/phpcbf bin/phpstan : % : vendor/%
-	ln -sf $< $@
+	ln -sf ../$< $@
 
 bin/typos:
 	mkdir -p bin/
@@ -127,13 +127,40 @@ npm-test: node_modules/.bin/eslint
 npm-fix: node_modules/.bin/eslint
 	npm run fix
 
+##@ Additional test suites
+TEST_PHP ?= php
+PYTHON ?= python3
+
+.PHONY: test-frontend
+test-frontend: ## Run frontend unit tests without a web server
+	npm run test:frontend
+
+.PHONY: test-browser
+test-browser: ## Run browser tests against an isolated test instance
+	npm run test:browser
+
+.PHONY: test-integration-refresh
+test-integration-refresh: ## Run isolated refresh worker integration tests
+	$(PYTHON) tests/integration/refresh/scheduler_test.py --php "$(TEST_PHP)"
+	$(PYTHON) tests/integration/refresh/concurrency_test.py --php "$(TEST_PHP)"
+	$(PYTHON) tests/integration/refresh/control_test.py --php "$(TEST_PHP)"
+	$(PYTHON) tests/integration/refresh/legacy_test.py --php "$(TEST_PHP)"
+
+.PHONY: test-integration-database
+test-integration-database: ## Run SQLite/PostgreSQL contracts with local PostgreSQL tools
+	$(PYTHON) tests/integration/database/matrix.py --php "$(TEST_PHP)"
+
+.PHONY: test-integration-api
+test-integration-api: ## Run API authentication tests using FRESHRSS_API_FIXTURE
+	FRESHRSS_PHP_BINARY="$(TEST_PHP)" node tests/integration/api/auth.mjs
+
 .PHONY: typos-test
 typos-test: bin/typos
 	bin/typos
 
 # TODO: Add shellcheck, shfmt, hadolint
 .PHONY: test-all
-test-all: composer-test npm-test typos-test ## Run all tests
+test-all: composer-test npm-test typos-test ## Run default PHP, frontend, lint and spelling checks
 
 .PHONY: fix-all
 fix-all: composer-fix npm-fix ## Run all fixes

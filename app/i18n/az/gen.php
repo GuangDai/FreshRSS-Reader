@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Yüksəlt',
 		'purge' => 'Təmizlə',
 		'refresh_opml' => 'OPML-i yenilə',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Çıxar',
 		'rename' => 'Adını dəyiş',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Veb sayta bax',
 		'submit' => 'Göndər',
 		'truncate' => 'Bütün məqalələri sil',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: yeni məqalələr!',
 		),
 		'labels_empty' => 'Etiket yoxdur',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Yeni məqalələr mövcuddur, səhifəni yeniləmək üçün klikləyin.',
 		'should_be_activated' => 'JavaScript aktiv olmalıdır',
 		'unsafe_csp_header' => 'İstifadə olunan CSP başlığı təhlükəsiz deyil və FreshRSS XSS hücumlarına qarşı həssas ola bilər. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Sənədləşməyə baxın</a>',

@@ -40,6 +40,7 @@
 		"ext-zlib": "*"
 	},
 	"suggest": {
+		"ext-pcntl": "Required by the optional durable refresh scheduler for independent worker deadlines",
 		"ext-iconv": "*",
 		"ext-pdo_mysql": "*",
 		"ext-pdo_pgsql": "*"
@@ -65,8 +66,8 @@
 		"squizlabs/php_codesniffer": "^4.0"
 	},
 	"scripts": {
-		"php-lint": "find . -type d -name 'vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 -P4 php -l 1>/dev/null",
-		"phtml-lint": "find . -type d -name 'vendor' -prune -o -name '*.phtml' -print0 | xargs -0 -n1 -P4 php -l 1>/dev/null",
+		"php-lint": "find . -type d \\( -name 'vendor' -o -name 'node_modules' -o -name 'bin' \\) -prune -o -name '*.php' -print0 | xargs -0 -n1 -P4 php -l 1>/dev/null",
+		"phtml-lint": "find . -type d \\( -name 'vendor' -o -name 'node_modules' -o -name 'bin' \\) -prune -o -name '*.phtml' -print0 | xargs -0 -n1 -P4 php -l 1>/dev/null",
 		"phpcs": "phpcs . -s",
 		"phpcbf": "phpcbf . -p -s",
 		"phpstan": "phpstan analyse --memory-limit 512M .",

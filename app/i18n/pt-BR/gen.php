@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Promover',
 		'purge' => 'Limpar',
 		'refresh_opml' => 'Atualizar OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Remover',
 		'rename' => 'Renomear',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Ver o site',
 		'submit' => 'Enviar',
 		'truncate' => 'Deletar todos os artigos',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: novos artigos!',
 		),
 		'labels_empty' => 'Sem etiquetas',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Há novos artigos disponíveis, clique para atualizar a página.',
 		'should_be_activated' => 'O JavaScript precisa estar ativo',
 		'unsafe_csp_header' => 'O cabeçalho CSP em uso é inseguro e o FreshRSS pode ser vulnerável a ataques XSS. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Consulte a documentação</a>',

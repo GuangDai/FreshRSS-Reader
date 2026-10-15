@@ -3,8 +3,37 @@ declare(strict_types=1);
 
 final class FreshRSS_SimplePieFetch extends \SimplePie\File
 {
+	private string $previousUrl = '';
+
 	public function __construct(string $url, int $timeout = 10, int $redirects = 5,
 		?array $headers = null, ?string $useragent = null, bool $force_fsockopen = false, array $curl_options = []) {
+
+		if (!\SimplePie\Misc::is_remote_uri($url) || $force_fsockopen) {
+			$this->set_status_code(0);
+			$this->set_body_content('');
+			$this->success = false;
+			$this->error = $force_fsockopen ? 'The socket transport cannot preserve HTTP address checks; use cURL'
+				: 'Fetching non-remote URLs is not permitted';
+			return;
+		}
+		$proxy = is_string($curl_options[CURLOPT_PROXY] ?? null) ? $curl_options[CURLOPT_PROXY] : '';
+		$retryAfter = FreshRSS_http_Util::getRetryAfter($url, $proxy);
+		if ($retryAfter > 0) {
+			$this->set_status_code(429);
+			$this->set_body_content('');
+			$this->success = false;
+			$this->error = 'Retry-After is active until ' . date('c', $retryAfter);
+			return;
+		}
+		if ($this->previousUrl !== '' && !FreshRSS_http_Util::compareURLOrigins($this->previousUrl, $url)) {
+			foreach (array_keys($headers ?? []) as $key) {
+				if (in_array(strtolower($key), ['authorization', 'cookie'], true)) {
+					unset($headers[$key]);
+				}
+			}
+			unset($curl_options[CURLOPT_USERNAME], $curl_options[CURLOPT_PASSWORD]);
+		}
+		$this->previousUrl = $url;
 
 		// Remove case-insensitively default HTTP headers passed by $headers if they are overridden by $curl_options[CURLOPT_HTTPHEADER]
 		if (is_array($curl_options[CURLOPT_HTTPHEADER] ?? null) && is_array($headers)) {
@@ -25,10 +54,11 @@ final class FreshRSS_SimplePieFetch extends \SimplePie\File
 			}
 		}
 
-		$redirects = $curl_options[CURLOPT_MAXREDIRS] ?? null;
-		if (!is_int($redirects)) {
-			$redirects = 4;
-		} elseif ($redirects < 0) {
+		$configuredRedirects = $curl_options[CURLOPT_MAXREDIRS] ?? $redirects;
+		if (is_int($configuredRedirects)) {
+			$redirects = $configuredRedirects;
+		}
+		if ($redirects < 0) {
 			$redirects = -1;	// infinite redirects
 		}
 		if (isset($curl_options[CURLOPT_FOLLOWLOCATION])) {
@@ -41,7 +71,20 @@ final class FreshRSS_SimplePieFetch extends \SimplePie\File
 			}
 		}
 
+		$maxBytes = max(0, FreshRSS_Context::systemConf()->limits['http_max_response_bytes'] ?? 16777216);
+		if ($maxBytes > 0) {
+			$existingLimit = $curl_options[CURLOPT_MAXFILESIZE_LARGE] ?? 0;
+			$curl_options[CURLOPT_MAXFILESIZE_LARGE] = is_int($existingLimit) && $existingLimit > 0 ? min($existingLimit, $maxBytes) : $maxBytes;
+		}
+
+		// Keep response headers available for Retry-After even on 429/503; reject error statuses below.
+		$curl_options[CURLOPT_FAILONERROR] = false;
 		parent::__construct($url, $timeout, $redirects, $headers, $useragent, $force_fsockopen, $curl_options);
+		if ($this->get_status_code() >= 400) {
+			$this->success = false;
+			$this->error ??= 'HTTP ' . $this->get_status_code();
+			$this->set_body_content('');
+		}
 	}
 
 	#[\Override]

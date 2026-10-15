@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Installed',	// TODO
 		'name' => 'Name',	// TODO
 		'no_configure_view' => 'This extension cannot be configured.',	// TODO
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'System extensions',	// TODO
 			'no_rights' => 'System extension (you do not have the required permissions)',	// TODO

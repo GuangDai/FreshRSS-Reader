@@ -106,10 +106,19 @@ abstract class Minz_ActionController {
 		foreach (Minz_ExtensionManager::listExtensions(true) as $extension) {
 			$extension->amendCsp($this->csp_policies);
 		}
-		foreach ($this->csp_policies as $directive => $sources) {
+		foreach ($this->amendCspPolicies($this->csp_policies) as $directive => $sources) {
 			$policies[] = $directive . ' ' . $sources;
 		}
 		header('Content-Security-Policy: ' . implode('; ', $policies));
+	}
+
+	/**
+	 * Apply application-specific restrictions after extension amendments.
+	 * @param array<string,string> $policies
+	 * @return array<string,string>
+	 */
+	protected function amendCspPolicies(array $policies): array {
+		return $policies;
 	}
 
 	/**

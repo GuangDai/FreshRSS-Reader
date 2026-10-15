@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Előléptet',
 		'purge' => 'Töröl',
 		'refresh_opml' => 'OPML frissítése',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Eltávolít',
 		'rename' => 'Átnevez',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Ugrás a forrásra',
 		'submit' => 'Mentés',
 		'truncate' => 'Minden cikk törlése',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: új cikkek!',
 		),
 		'labels_empty' => 'Nincsenek címkék',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Új cikkek elérhetőek, kattints a lap frissítéséhez.',
 		'should_be_activated' => 'A JavaScript futtatásának engedélyezve kell lennie',
 		'unsafe_csp_header' => 'A CSP fejléc használata nem biztonságos és a FreshRSS sebezhető lehet az XSS támadásokkal szemben. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Lásd dokumentáció</a>',

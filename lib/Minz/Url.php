@@ -5,6 +5,14 @@ declare(strict_types=1);
  * The Minz_Url class handles URLs across the MINZ framework
  */
 class Minz_Url {
+	/** @var \Closure(array{c:string,a:string,params:array<string,mixed>}):array{c:string,a:string,params:array<string,mixed>}|null */
+	private static ?\Closure $controllerUrlTransformer = null;
+
+	/** @param \Closure(array{c:string,a:string,params:array<string,mixed>}):array{c:string,a:string,params:array<string,mixed>}|null $transformer */
+	public static function setControllerUrlTransformer(?\Closure $transformer): void {
+		self::$controllerUrlTransformer = $transformer;
+	}
+
 	/**
 	 * Display a formatted URL
 	 * @param string|array{c?:string,a?:string,params?:array<string,mixed>} $url The URL to format, defined as an array:
@@ -119,11 +127,12 @@ class Minz_Url {
 	 * @return array{c:string,a:string,params:array<string,mixed>} Verified controller URL as array
 	 */
 	public static function checkControllerUrl(array $url): array {
-		return [
+		$checked = [
 			'c' => empty($url['c']) || !is_string($url['c']) ? Minz_Request::defaultControllerName() : $url['c'],
 			'a' => empty($url['a']) || !is_string($url['a']) ? Minz_Request::defaultActionName() : $url['a'],
 			'params' => empty($url['params']) || !is_array($url['params']) ? [] : $url['params'],
 		];
+		return self::$controllerUrlTransformer === null ? $checked : (self::$controllerUrlTransformer)($checked);
 	}
 
 	/** @param array{c?:string,a?:string,params?:array<string,mixed>} $url */

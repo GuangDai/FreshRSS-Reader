@@ -1,0 +1,65 @@
+# Isolated local environment; never mount a production database here.
+name: freshrss-enhanced
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Docker/Dockerfile
+    ports:
+      - "127.0.0.1:${FRESHRSS_PORT:-18080}:80"
+    volumes:
+      - reader-data:/var/www/FreshRSS/data
+      - reader-extensions:/var/www/FreshRSS/extensions
+      - ./php.ini:/etc/php/8.4/apache2/conf.d/99-reader-budget.ini:ro
+      - ./php.ini:/etc/php/8.4/cli/conf.d/99-reader-budget.ini:ro
+      - ./php-cli.ini:/etc/php/8.4/cli/conf.d/zz-reader-cli.ini:ro
+      - ./apache.conf:/etc/apache2/mods-available/mpm_prefork.conf:ro
+    environment:
+      TZ: ${TZ:-UTC}
+      CRON_MIN: "*/5"
+      FRESHRSS_ENV: production
+    mem_limit: 768m
+    mem_reservation: 256m
+    pids_limit: 96
+    cpus: 1.0
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 80) ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  db:
+    image: postgres:17
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: freshrss
+      POSTGRES_USER: freshrss
+      POSTGRES_PASSWORD: ${FRESHRSS_DB_PASSWORD:-local-development-only}
+    volumes:
+      - reader-db:/var/lib/postgresql/data
+    mem_limit: 512m
+    mem_reservation: 128m
+    shm_size: 128m
+    pids_limit: 64
+    restart: unless-stopped
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=64MB", "-c", "max_connections=30"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freshrss -d freshrss"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+volumes:
+  reader-data:
+  reader-extensions:
+  reader-db:

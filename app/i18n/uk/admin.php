@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Встановлено',
 		'name' => 'Назва',
 		'no_configure_view' => 'Розширення не налаштовується.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Системні розширення',
 			'no_rights' => 'Системне розширення (вам бракує дозволу)',

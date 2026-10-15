@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+use FreshRSS\Services\Reader\ApiResponse;
+use FreshRSS\Utils\Http\ApiInput;
+
 /**
  * MINZ - Copyright 2011 Marien Fressinaud
  * Sous licence AGPL3 <https://www.gnu.org/licenses/>
@@ -565,11 +568,28 @@ class Minz_Request {
 		if (!str_starts_with(self::extractContentType(), 'application/json')) {
 			return;
 		}
-		$ORIGINAL_INPUT = file_get_contents('php://input', false, null, 0, 1048576);
-		if ($ORIGINAL_INPUT == false) {
+		$isReader = ($_GET['c'] ?? null) === 'reader';
+		$maximum = $isReader && FreshRSS_Context::hasSystemConf() ? ApiInput::limits()['maxRequestBytes'] : 1048576;
+		$maximum = max(1, min(PHP_INT_MAX - 1, $maximum));
+		$ORIGINAL_INPUT = file_get_contents('php://input', false, null, 0, $maximum + 1);
+		if (is_string($ORIGINAL_INPUT) && strlen($ORIGINAL_INPUT) > $maximum) {
+			if ($isReader) {
+				ApiResponse::respond(['error' => 'request_too_large'], 413);
+			}
+			http_response_code(413);
+			header('Content-Type: application/json; charset=UTF-8');
+			exit('{"version":1,"error":"request_too_large"}');
+		}
+		if ($ORIGINAL_INPUT === false || $ORIGINAL_INPUT === '') {
+			if ($isReader) {
+				ApiResponse::respond(['error' => 'invalid_json'], 400);
+			}
 			return;
 		}
-		if (!is_array($json = json_decode($ORIGINAL_INPUT, true))) {
+		if (!is_array($json = json_decode($ORIGINAL_INPUT, true)) || ($isReader && !str_starts_with(ltrim($ORIGINAL_INPUT), '{'))) {
+			if ($isReader) {
+				ApiResponse::respond(['error' => 'invalid_json'], 400);
+			}
 			return;
 		}
 

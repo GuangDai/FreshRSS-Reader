@@ -41,7 +41,13 @@ class FreshRSS_DatabaseDAOPGSQL extends FreshRSS_DatabaseDAOSQLite {
 	public function getSchema(string $table): array {
 		$sql = <<<'SQL'
 			SELECT column_name AS field, data_type AS type, column_default AS default, is_nullable AS null
-			FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = :table_name
+			FROM INFORMATION_SCHEMA.COLUMNS
+			WHERE (table_schema, table_name) = (
+				SELECT n.nspname, c.relname FROM pg_catalog.pg_class c
+				INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+				WHERE c.oid = to_regclass(quote_ident(:table_name))
+			)
+			ORDER BY ordinal_position
 			SQL;
 		$res = $this->fetchAssoc($sql, [':table_name' => $this->pdo->prefix() . $table]);
 		return $res == null ? [] : $this->listDaoToSchema($res);
@@ -56,7 +62,7 @@ class FreshRSS_DatabaseDAOPGSQL extends FreshRSS_DatabaseDAOSQLite {
 		return [
 			'name' => is_string($dao['field'] ?? null) ? $dao['field'] : '',
 			'type' => is_string($dao['type'] ?? null) ? strtolower($dao['type']) : '',
-			'notnull' => empty($dao['null']),
+			'notnull' => ($dao['null'] ?? 'YES') === 'NO',
 			'default' => is_scalar($dao['default'] ?? null) ? $dao['default'] : null,
 		];
 	}
@@ -64,6 +70,29 @@ class FreshRSS_DatabaseDAOPGSQL extends FreshRSS_DatabaseDAOSQLite {
 	#[\Override]
 	protected function selectVersion(): string {
 		return $this->fetchString('SELECT version()') ?? '';
+	}
+
+	/** @return list<string>|null */
+	#[\Override]
+	protected function readerIndexColumns(): ?array {
+		$sql = <<<'SQL'
+			SELECT a.attname FROM pg_catalog.pg_index i
+			CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key(attnum, position)
+			INNER JOIN pg_catalog.pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=key.attnum
+			WHERE i.indexrelid=to_regclass(quote_ident(:index_name))
+				AND i.indrelid=to_regclass(quote_ident(:table_name))
+				AND i.indisvalid AND i.indisready AND i.indpred IS NULL AND i.indexprs IS NULL
+			ORDER BY key.position
+			SQL;
+		$columns = $this->fetchColumn($sql, 0, [':index_name' => $this->pdo->prefix() . 'entry_feed_read_index',
+			':table_name' => $this->pdo->prefix() . 'entry']);
+		return $columns === null ? null : array_map(static fn(int|string|null $column): string => (string)$column, $columns);
+	}
+
+	#[\Override]
+	protected function lockReaderIndexUpgrade(): bool {
+		// Serialise explicit upgrades, including the check after another upgrader commits.
+		return $this->pdo->exec('LOCK TABLE `_entry` IN SHARE ROW EXCLUSIVE MODE') !== false;
 	}
 
 	#[\Override]

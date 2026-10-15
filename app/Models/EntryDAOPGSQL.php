@@ -88,7 +88,7 @@ class FreshRSS_EntryDAOPGSQL extends FreshRSS_EntryDAOSQLite {
 			DO $$
 			DECLARE
 			maxrank bigint := (SELECT MAX(id) FROM `_entrytmp`);
-			rank bigint := (SELECT maxrank - COUNT(*) FROM `_entrytmp`);
+			rank bigint := GREATEST(COALESCE((SELECT MAX(id) FROM `_entry`), 0), (SELECT maxrank - COUNT(*) FROM `_entrytmp`));
 			BEGIN
 				INSERT INTO `_entry`
 					(id, guid, title, author, content, link, date, `lastSeen`, hash, is_read, is_favorite, id_feed, tags, attributes)
@@ -97,17 +97,10 @@ class FreshRSS_EntryDAOPGSQL extends FreshRSS_EntryDAOSQLite {
 						FROM `_entrytmp` AS etmp
 						ORDER BY etmp.date, etmp.id)
 					ON CONFLICT DO NOTHING;
-				DELETE FROM `_entrytmp` WHERE id <= maxrank;
+				DELETE FROM `_entrytmp` WHERE id <= maxrank
+					AND EXISTS (SELECT 1 FROM `_entry` e WHERE e.id_feed=`_entrytmp`.id_feed AND e.guid=`_entrytmp`.guid);
 			END $$;
 			SQL;
-		$hadTransaction = $this->pdo->inTransaction();
-		if (!$hadTransaction) {
-			$this->pdo->beginTransaction();
-		}
-		$result = $this->pdo->exec($sql) !== false;
-		if (!$hadTransaction) {
-			$this->pdo->commit();
-		}
-		return $result;
+		return $this->executeAtomic($sql);
 	}
 }

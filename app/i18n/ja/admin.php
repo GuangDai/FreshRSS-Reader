@@ -35,6 +35,11 @@ return array(
 		'latest' => 'インストール済み',
 		'name' => '名前',
 		'no_configure_view' => 'この拡張機能は設定できません。',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'システム拡張機能',
 			'no_rights' => 'システム拡張機能（必要な権限がありません）',

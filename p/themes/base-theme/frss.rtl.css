@@ -87,10 +87,11 @@ main#stream {
 
 main.prompt {
 	margin: 3rem auto 0;
-	padding: 2rem;
+	padding: clamp(1rem, 4vw, 2rem);
 	max-width: 400px;
-	min-width: 300px;
-	width: 33%;
+	min-width: 0;
+	width: calc(100% - 2rem);
+	box-sizing: border-box;
 	text-align: center;
 }
 
@@ -1919,10 +1920,47 @@ a.website:hover .favicon {
 }
 
 #popup-close {
+	padding: 0;
+	display: flex;
 	float: left;
-	width: 27px;
-	height: 22px;
-	padding-top: 5px;
+	width: 44px;
+	height: 44px;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	flex-shrink: 0;
+}
+
+#popup-close:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: -4px;
+}
+
+.panel-status {
+	padding: 1rem;
+	overflow-wrap: anywhere;
+}
+
+.panel-status > p {
+	margin: 0 0 1rem;
+}
+
+.panel-status > .btn {
+	max-width: 100%;
+	min-height: 44px;
+	white-space: normal;
+}
+
+.panel-status > [hidden] {
+	display: none;
+}
+
+.popup-row.panel-status > p {
+	margin: 1rem;
+}
+
+.popup-row.panel-status > .btn {
+	margin: 0 1rem 1rem;
 }
 
 #popup-close:hover,
@@ -2129,6 +2167,30 @@ html.slider-active {
 	left: 0;
 	overflow: auto;
 	z-index: 100;
+}
+
+#slider > a.toggle_aside {
+	padding: 0;
+	background-color: var(--frss-background-color);
+	display: flex;
+	width: 44px;
+	height: 44px;
+	margin-inline-start: auto;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+#slider > a.toggle_aside:hover {
+	background-color: var(--frss-background-color);
+}
+
+#slider > a.toggle_aside:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: -4px;
 }
 
 #slider.active:target {

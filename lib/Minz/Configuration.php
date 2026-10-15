@@ -72,8 +72,6 @@ class Minz_Configuration {
 
 	/**
 	 * The namespace of the current configuration.
-	 * Unused.
-	 * @phpstan-ignore property.onlyWritten
 	 */
 	private string $namespace = '';
 
@@ -92,6 +90,12 @@ class Minz_Configuration {
 	 * @var array<string,mixed>
 	 */
 	private array $data = [];
+
+	/** @var array<string,mixed> Last successfully loaded or published snapshot. */
+	private array $loaded_data = [];
+
+	/** @var array<string,true> Reject recursive writes even through another instance of the same file. */
+	private static array $savingFiles = [];
 
 	/**
 	 * An object which help to set good values in configuration.
@@ -128,6 +132,7 @@ class Minz_Configuration {
 				throw $e;
 			}
 		}
+		$this->loaded_data = $this->data;
 	}
 
 	/**
@@ -221,28 +226,155 @@ class Minz_Configuration {
 	 * Save the current configuration in the configuration file.
 	 */
 	public function save(): bool {
-		$tmp_filename = $this->config_filename . '.tmp.php';
-		$back_filename = $this->config_filename . '.bak.php';
+		return $this->saveData();
+	}
 
-		if (!file_put_contents($tmp_filename,
-			"<?php\nreturn " . var_export($this->data, true) . ';', LOCK_EX)) {
-			@unlink($tmp_filename);
-			return false;
+	/**
+	 * Opaque version of the loaded snapshot, bound to this configuration file.
+	 * A configured system salt is required before exposing versions to API clients.
+	 * @throws LogicException
+	 */
+	public function version(): string {
+		return $this->versionFor($this->loaded_data);
+	}
+
+	/** @param array<string,mixed> $data */
+	private function versionFor(array $data): string {
+		$system = self::$config_list['system'] ?? null;
+		$secret = $this->namespace === 'system' ? ($data['salt'] ?? null) : ($system?->loaded_data['salt'] ?? null);
+		if (!is_string($secret) || $secret === '') {
+			throw new LogicException('Configuration versions require a non-empty system salt');
 		}
+		return hash_hmac('sha256', $this->config_filename . "\0" . serialize($data), $secret);
+	}
 
-		if (!copy($this->config_filename, $back_filename)) {
-			@unlink($tmp_filename);
-			return false;
+	/**
+	 * Merge top-level values into the latest file; null removes a key. Nested arrays are replaced as a whole.
+	 * @param array<string,mixed> $changes
+	 * @throws Minz_ConfigurationConflictException
+	 * @throws Throwable
+	 */
+	public function savePatch(array $changes, ?string $expectedVersion = null): bool {
+		return $this->mutate(static function (array $latest) use ($changes): array {
+			foreach ($changes as $key => $value) {
+				if ($value === null) {
+					unset($latest[$key]);
+				} else {
+					$latest[$key] = $value;
+				}
+			}
+			return $latest;
+		}, $expectedVersion);
+	}
+
+	/**
+	 * Transform the latest configuration while holding its write lock. The callback must not call save methods.
+	 * Failures leave both the current file and this object's data unchanged; exceptions propagate to the caller.
+	 * @param callable(array<string,mixed>):array<string,mixed> $transform
+	 * @throws Minz_ConfigurationConflictException
+	 * @throws Throwable
+	 */
+	public function mutate(callable $transform, ?string $expectedVersion = null): bool {
+		return $this->saveData($transform, $expectedVersion);
+	}
+
+	/**
+	 * @param callable(array<string,mixed>):array<string,mixed>|null $transform
+	 * @throws Throwable
+	 */
+	private function saveData(?callable $transform = null, ?string $expectedVersion = null): bool {
+		$identity = realpath($this->config_filename) ?: $this->config_filename;
+		if (isset(self::$savingFiles[$identity])) {
+			throw new LogicException('Recursive configuration save is not allowed');
 		}
-
-		@rename($tmp_filename, $this->config_filename);
-
-		// Clear PHP cache for include
-		if (function_exists('opcache_invalidate')) {
-			opcache_invalidate($this->config_filename);
+		self::$savingFiles[$identity] = true;
+		$originalData = $this->data;
+		$originalLoadedData = $this->loaded_data;
+		$published = false;
+		$lock = null;
+		$tmp_filename = '';
+		try {
+			// Keep the lock inode stable while replacing the configuration itself atomically.
+			$lock = @fopen($this->config_filename . '.lock', 'c');
+			if (!is_resource($lock) || !flock($lock, LOCK_EX)) {
+				return false;
+			}
+			try {
+				$defaults = $this->default_filename === null ? [] : self::load($this->default_filename);
+			} catch (Minz_FileNotExistException $e) {
+				return false;
+			}
+			$data = $this->data;
+			if ($transform !== null) {
+				if (function_exists('opcache_invalidate')) {
+					opcache_invalidate($this->config_filename, true);
+				}
+				try {
+					$latest = array_filter(array_replace_recursive($defaults, self::load($this->config_filename)), 'is_string', ARRAY_FILTER_USE_KEY);
+				} catch (Minz_FileNotExistException $e) {
+					return false;
+				}
+				if ($expectedVersion !== null && !hash_equals($this->versionFor($latest), $expectedVersion)) {
+					throw new Minz_ConfigurationConflictException('The configuration changed since it was loaded');
+				}
+				$data = $transform($latest);
+				if (!is_array_keys_string($data)) {
+					throw new UnexpectedValueException('Configuration mutations must return an array with string keys');
+				}
+			}
+			$effectiveData = array_filter(array_replace_recursive($defaults, $data), 'is_string', ARRAY_FILTER_USE_KEY);
+			clearstatcache(true, $this->config_filename);
+			$permissions = @fileperms($this->config_filename);
+			if ($permissions === false) {
+				return false;
+			}
+			$tmp_filename = $this->config_filename . '.' . bin2hex(random_bytes(8)) . '.tmp.php';
+			$tmp = @fopen($tmp_filename, 'x');
+			if (!is_resource($tmp)) {
+				return false;
+			}
+			fclose($tmp);
+			if (!@chmod($tmp_filename, $permissions & 0777)) {
+				return false;
+			}
+			$content = "<?php\nreturn " . var_export($data, true) . ';';
+			if (@file_put_contents($tmp_filename, $content) !== strlen($content)) {
+				return false;
+			}
+			$back_filename = $this->config_filename . '.bak.php';
+			$backup = @fopen($back_filename, 'c');
+			if (!is_resource($backup)) {
+				return false;
+			}
+			fclose($backup);
+			if (!@chmod($back_filename, $permissions & 0777) || !@copy($this->config_filename, $back_filename)) {
+				return false;
+			}
+			if (!@rename($tmp_filename, $this->config_filename)) {
+				return false;
+			}
+			// Clear PHP cache only after the replacement succeeded, including same-second writes.
+			if (function_exists('opcache_invalidate')) {
+				opcache_invalidate($this->config_filename, true);
+			}
+			$this->data = $effectiveData;
+			$this->loaded_data = $effectiveData;
+			$published = true;
+			return true;
+		} finally {
+			if ($tmp_filename !== '') {
+				@unlink($tmp_filename);
+			}
+			if (is_resource($lock)) {
+				flock($lock, LOCK_UN);
+				fclose($lock);
+			}
+			if (!$published) {
+				$this->data = $originalData;
+				$this->loaded_data = $originalLoadedData;
+			}
+			unset(self::$savingFiles[$identity]);
 		}
-
-		return true;
 	}
 
 	/**

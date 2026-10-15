@@ -54,7 +54,7 @@ class FreshRSS_DatabaseDAOSQLite extends FreshRSS_DatabaseDAO {
 		return [
 			'name'    => is_string($dao['name'] ?? null) ? $dao['name'] : '',
 			'type'    => is_string($dao['type'] ?? null) ? strtolower($dao['type']) : '',
-			'notnull' => empty($dao['notnull']),
+			'notnull' => !empty($dao['notnull']),
 			'default' => is_scalar($dao['dflt_value'] ?? null) ? $dao['dflt_value'] : null,
 		];
 	}
@@ -62,6 +62,57 @@ class FreshRSS_DatabaseDAOSQLite extends FreshRSS_DatabaseDAO {
 	#[\Override]
 	protected function selectVersion(): string {
 		return $this->fetchString('SELECT sqlite_version()') ?? '';
+	}
+
+	/** @return list<string>|null */
+	protected function readerIndexColumns(): ?array {
+		$columns = $this->fetchColumn("PRAGMA index_info('entry_feed_read_index')", 2);
+		return $columns === null ? null : array_map(static fn(int|string|null $column): string => (string)$column, $columns);
+	}
+
+	protected function lockReaderIndexUpgrade(): bool {
+		return true;
+	}
+
+	/** Rebuild the old two-column index atomically; callers choose their maintenance window. */
+	#[\Override]
+	public function upgradeReaderIndexes(): bool {
+		$expected = ['id_feed', 'is_read', 'id'];
+		$columns = $this->readerIndexColumns();
+		if ($columns === null || $columns === $expected) {
+			return $columns !== null;
+		}
+		$hadTransaction = $this->pdo->inTransaction();
+		$finished = false;
+		$started = $hadTransaction ? $this->pdo->exec('SAVEPOINT freshrss_reader_index_upgrade') !== false : $this->pdo->beginTransaction();
+		if (!$started) {
+			return false;
+		}
+		try {
+			if (!$this->lockReaderIndexUpgrade()) {
+				return false;
+			}
+			$columns = $this->readerIndexColumns();
+			if ($columns === null) {
+				return false;
+			}
+			if ($columns !== $expected && $this->pdo->exec('DROP INDEX IF EXISTS `_entry_feed_read_index`;
+				CREATE INDEX `_entry_feed_read_index` ON `_entry` (id_feed,is_read,id)') === false) {
+				Minz_Log::error('Reader index upgrade failed: ' . json_encode($this->pdo->errorInfo()));
+				return false;
+			}
+			$finished = $hadTransaction ? $this->pdo->exec('RELEASE SAVEPOINT freshrss_reader_index_upgrade') !== false : $this->pdo->commit();
+			return $finished;
+		} finally {
+			if (!$finished && $this->pdo->inTransaction()) {
+				if ($hadTransaction) {
+					$this->pdo->exec('ROLLBACK TO SAVEPOINT freshrss_reader_index_upgrade');
+					$this->pdo->exec('RELEASE SAVEPOINT freshrss_reader_index_upgrade');
+				} else {
+					$this->pdo->rollBack();
+				}
+			}
+		}
 	}
 
 	#[\Override]

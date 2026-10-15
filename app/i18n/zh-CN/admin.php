@@ -35,6 +35,11 @@ return array(
 		'latest' => '已安装',
 		'name' => '名称',
 		'no_configure_view' => '此扩展无法配置。',
+		'settings' => array(
+			'conflict' => '打开表单后配置已被修改。请核对当前值后重新保存。',
+			'import_json' => '粘贴导出的配置文档。导出时省略的敏感值将保持不变。',
+			'secret_keep' => '留空将保留已保存的值。',
+		),
 		'system' => array(
 			'_' => '系统扩展',
 			'no_rights' => '系统扩展（你没有所需权限）',

@@ -15,6 +15,12 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 	 * @param array{id?:int,name:string,attributes?:array<string,mixed>} $valuesTmp
 	 */
 	public function addTag(array $valuesTmp): int|false {
+		$attributes = $valuesTmp['attributes'] ?? [];
+		$attributes = is_string($attributes) ? $attributes : json_encode($attributes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		if ($attributes === false) {
+			Minz_Log::error(__METHOD__ . ': invalid tag attributes: ' . json_last_error_msg());
+			return false;
+		}
 		if (empty($valuesTmp['id'])) {	// Auto-generated ID
 			$sql = <<<'SQL'
 				INSERT INTO `_tag`(name, attributes)
@@ -33,16 +39,12 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 		$stm = $this->pdo->prepare($sql);
 
 		$valuesTmp['name'] = mb_strcut(trim($valuesTmp['name']), 0, FreshRSS_DatabaseDAO::LENGTH_INDEX_UNICODE, 'UTF-8');
-		if (!isset($valuesTmp['attributes'])) {
-			$valuesTmp['attributes'] = [];
-		}
 
 		if ($stm !== false &&
 			(empty($valuesTmp['id']) || $stm->bindValue(':id', $valuesTmp['id'], PDO::PARAM_INT)) &&
 			$stm->bindValue(':name1', $valuesTmp['name'], PDO::PARAM_STR) &&
 			$stm->bindValue(':name2', $valuesTmp['name'], PDO::PARAM_STR) &&
-			$stm->bindValue(':attributes', is_string($valuesTmp['attributes']) ? $valuesTmp['attributes'] :
-				json_encode($valuesTmp['attributes'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), PDO::PARAM_STR) &&
+			$stm->bindValue(':attributes', $attributes, PDO::PARAM_STR) &&
 			$stm->execute() && $stm->rowCount() > 0) {
 			if (empty($valuesTmp['id'])) {
 				// Auto-generated ID
@@ -67,7 +69,7 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 			];
 			return $this->addTag($values);
 		}
-		return $tag->id();
+		return $tag0->id();
 	}
 
 	public function updateTagName(int $id, string $name): int|false {
@@ -96,13 +98,18 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 	 * @param array<string,mixed> $attributes
 	 */
 	public function updateTagAttributes(int $id, array $attributes): int|false {
+		$encoded = json_encode($attributes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		if ($encoded === false) {
+			Minz_Log::error(__METHOD__ . ': invalid tag attributes: ' . json_last_error_msg());
+			return false;
+		}
 		$sql = <<<'SQL'
 			UPDATE `_tag` SET attributes=:attributes WHERE id=:id
 			SQL;
 		$stm = $this->pdo->prepare($sql);
 		if ($stm !== false &&
 			$stm->bindValue(':id', $id, PDO::PARAM_INT) &&
-			$stm->bindValue(':attributes', json_encode($attributes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), PDO::PARAM_STR) &&
+			$stm->bindValue(':attributes', $encoded, PDO::PARAM_STR) &&
 			$stm->execute()) {
 			return $stm->rowCount();
 		}
@@ -171,34 +178,60 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 	}
 
 	public function updateEntryTag(int $oldTagId, int $newTagId): int|false {
-		$sql = <<<'SQL'
-			DELETE FROM `_entrytag` WHERE EXISTS (
-				SELECT 1 FROM `_entrytag` AS e
-				WHERE e.id_entry = `_entrytag`.id_entry AND e.id_tag = :new_tag_id AND `_entrytag`.id_tag = :old_tag_id)
-			SQL;
-		$stm = $this->pdo->prepare($sql);
-		if ($stm === false ||
-			!$stm->bindValue(':new_tag_id', $newTagId, PDO::PARAM_INT) ||
-			!$stm->bindValue(':old_tag_id', $oldTagId, PDO::PARAM_INT) ||
-			!$stm->execute()) {
-			$info = $stm === false ? $this->pdo->errorInfo() : $stm->errorInfo();
-			Minz_Log::error('SQL error ' . __METHOD__ . ' A ' . json_encode($info));
+		if ($oldTagId <= 0 || $newTagId <= 0) {
 			return false;
 		}
-
-		$sql = <<<'SQL'
-			UPDATE `_entrytag` SET id_tag = :new_tag_id WHERE id_tag = :old_tag_id
-			SQL;
-		$stm = $this->pdo->prepare($sql);
-		if ($stm !== false &&
-			$stm->bindValue(':new_tag_id', $newTagId, PDO::PARAM_INT) &&
-			$stm->bindValue(':old_tag_id', $oldTagId, PDO::PARAM_INT) &&
-			$stm->execute()) {
-			return $stm->rowCount();
+		if ($oldTagId === $newTagId) {
+			return 0;
 		}
-		$info = $stm === false ? $this->pdo->errorInfo() : $stm->errorInfo();
-		Minz_Log::error('SQL error ' . __METHOD__ . ' B ' . json_encode($info));
-		return false;
+		return $this->atomicWrite(function () use ($oldTagId, $newTagId): int|false {
+			$sql = static::sqlIgnoreConflict(<<<'SQL'
+				INSERT INTO `_entrytag` (id_tag, id_entry)
+				SELECT ?, id_entry FROM `_entrytag` WHERE id_tag=?
+				SQL);
+			$stm = $this->pdo->prepare($sql);
+			if ($stm === false || !$stm->execute([$newTagId, $oldTagId])) {
+				return false;
+			}
+			$affected = $stm->rowCount();
+			// INSERT IGNORE on MySQL can also ignore invalid rows; only remove the source after every association exists at the target.
+			$missing = $this->fetchInt('SELECT COUNT(*) FROM `_entrytag` source LEFT JOIN `_entrytag` target'
+				. ' ON target.id_entry=source.id_entry AND target.id_tag=:new_tag_id'
+				. ' WHERE source.id_tag=:old_tag_id AND target.id_entry IS NULL',
+				[':new_tag_id' => $newTagId, ':old_tag_id' => $oldTagId]);
+			if ($missing !== 0) {
+				return false;
+			}
+			$stm = $this->pdo->prepare('DELETE FROM `_entrytag` WHERE id_tag=?');
+			return $stm !== false && $stm->execute([$oldTagId]) ? $affected : false;
+		});
+	}
+
+	/** @param callable(): (int|false) $write */
+	private function atomicWrite(callable $write): int|false {
+		$hadTransaction = $this->pdo->inTransaction();
+		$finished = false;
+		if (!($hadTransaction ? $this->pdo->exec('SAVEPOINT freshrss_tag_write') !== false : $this->pdo->beginTransaction())) {
+			return false;
+		}
+		try {
+			$affected = $write();
+			if ($affected === false) {
+				Minz_Log::error('SQL error ' . __METHOD__ . json_encode($this->pdo->errorInfo()));
+				return false;
+			}
+			$finished = $hadTransaction ? $this->pdo->exec('RELEASE SAVEPOINT freshrss_tag_write') !== false : $this->pdo->commit();
+			return $finished ? $affected : false;
+		} finally {
+			if (!$finished && $this->pdo->inTransaction()) {
+				if ($hadTransaction) {
+					$this->pdo->exec('ROLLBACK TO SAVEPOINT freshrss_tag_write');
+					$this->pdo->exec('RELEASE SAVEPOINT freshrss_tag_write');
+				} else {
+					$this->pdo->rollBack();
+				}
+			}
+		}
 	}
 
 	public function searchById(int $id): ?FreshRSS_Tag {
@@ -329,31 +362,46 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 	 * @return int|false Number of new entries or false in case of error
 	 */
 	public function tagEntries(iterable $addLabels): int|false {
-		$hasValues = false;
-		$sql = <<<'SQL'
-			INSERT INTO `_entrytag`(id_tag, id_entry) VALUES
-			SQL;
-		foreach ($addLabels as $addLabel) {
-			$id_tag = (int)($addLabel['id_tag'] ?? 0);
-			$id_entry = $addLabel['id_entry'] ?? '';
-			if ($id_tag > 0 && (is_int($id_entry) || ctype_digit($id_entry))) {
-				$sql .= "({$id_tag},{$id_entry}),";
-				$hasValues = true;
+		$validLabels = (static function () use ($addLabels): Generator {
+			foreach ($addLabels as $addLabel) {
+				$id_tag = (int)($addLabel['id_tag'] ?? 0);
+				$id_entry = (string)($addLabel['id_entry'] ?? '');
+				if ($id_tag <= 0 || !ctype_digit($id_entry) || trim($id_entry, '0') === '') {
+					continue;
+				}
+				yield [$id_tag, $id_entry];
 			}
+		})();
+		if (!$validLabels->valid()) {
+			return 0;
 		}
-		$sql = rtrim($sql, ',');
-		if (!$hasValues) {
-			return false;
-		}
-		$sql = static::sqlIgnoreConflict($sql);
+		return $this->atomicWrite(function () use ($validLabels): int|false {
+			$affected = 0;
+			$values = [];
+			$chunkSize = intdiv(FreshRSS_DatabaseDAO::MAX_VARIABLE_NUMBER, 2) * 2;
+			foreach ($validLabels as [$id_tag, $id_entry]) {
+				$values[] = $id_tag;
+				$values[] = $id_entry;
+				if (count($values) === $chunkSize) {
+					$count = $this->insertLabels($values);
+					if ($count === false) {
+						return false;
+					}
+					$affected += $count;
+					$values = [];
+				}
+			}
+			$count = $values === [] ? 0 : $this->insertLabels($values);
+			return $count === false ? false : $affected + $count;
+		});
+	}
 
-		$affected = $this->pdo->exec($sql);
-		if ($affected !== false) {
-			return $affected;
-		}
-		$info = $this->pdo->errorInfo();
-		Minz_Log::error('SQL error ' . __METHOD__ . json_encode($info));
-		return false;
+	/** @param non-empty-list<int|string> $values */
+	private function insertLabels(array $values): int|false {
+		$sql = static::sqlIgnoreConflict('INSERT INTO `_entrytag` (id_tag, id_entry) VALUES '
+			. implode(',', array_fill(0, intdiv(count($values), 2), '(?,?)')));
+		$stm = $this->pdo->prepare($sql);
+		return $stm !== false && $stm->execute($values) ? $stm->rowCount() : false;
 	}
 
 	/**
@@ -389,6 +437,9 @@ class FreshRSS_TagDAO extends Minz_ModelPdo {
 	 * @return list<array{id_entry:int|numeric-string,id_tag:int,name:string}>|null
 	 */
 	public function getTagsForEntries(array $entries): array|null {
+		if ($entries === []) {
+			return [];
+		}
 		$sql = <<<'SQL'
 		SELECT et.id_entry, et.id_tag, t.name
 		FROM `_tag` t

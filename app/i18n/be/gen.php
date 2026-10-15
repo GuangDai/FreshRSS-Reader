@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Павысіць',
 		'purge' => 'Ачысціць',
 		'refresh_opml' => 'Абнавіць OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Выдаліць',
 		'rename' => 'Перайменаваць',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Праглядзець сайт',
 		'submit' => 'Адправіць',
 		'truncate' => 'Выдаліць усе артыкулы',
@@ -193,6 +195,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: новыя артыкулы!',
 		),
 		'labels_empty' => 'Няма метак',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Даступныя новыя артыкулы, націсніце, каб абнавіць старонку.',
 		'should_be_activated' => 'Неабходна ўключыць JavaScript',
 		'unsafe_csp_header' => 'Загаловак CSP, які выкарыстоўваецца, небяспечны, і FreshRSS можа быць уразлівай да атак XSS. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Паглядзіце дакументацыю</a>',

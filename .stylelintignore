@@ -1,4 +1,5 @@
 .git/
+bin/
 extensions/
 node_modules/
 p/scripts/vendor/

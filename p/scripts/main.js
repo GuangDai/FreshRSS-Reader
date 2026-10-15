@@ -221,6 +221,18 @@ function removeArticle(div) {
 const pending_entries = {};
 let mark_read_queue = [];
 
+function resetPendingEntries(queue) {
+	for (const id of queue) {
+		const div = document.getElementById('flux_' + id);
+		if (div) {
+			div.querySelectorAll('a.read > .icon').forEach(icon => {
+				icon.outerHTML = div.classList.contains('not_read') ? context.icons.unread : context.icons.read;
+			});
+		}
+		delete pending_entries['flux_' + id];
+	}
+}
+
 async function send_mark_read_queue(queue, asRead, callback) {
 	if (!queue || queue.length === 0) {
 		if (callback) {
@@ -229,6 +241,10 @@ async function send_mark_read_queue(queue, asRead, callback) {
 		return;
 	}
 	let json;
+	const controller = new AbortController();
+	const timeout = context.network.request_timeout > 0
+		? setTimeout(() => controller.abort(), context.network.request_timeout * 1000)
+		: null;
 	try {
 		const resp = await fetch('.?c=entry&a=read' + (asRead ? '' : '&is_read=0'), {
 			method: 'POST',
@@ -240,55 +256,54 @@ async function send_mark_read_queue(queue, asRead, callback) {
 				_csrf: context.csrf,
 				id: queue,
 			}),
-			keepalive: true
+			keepalive: true,
+			signal: controller.signal
 		});
 		if (!resp.ok) {
-			for (let i = queue.length - 1; i >= 0; i--) {
-				const div = document.getElementById('flux_' + queue[i]);
-				div.querySelectorAll('a.read > .icon').forEach(icon => {
-					icon.outerHTML = div.classList.contains('not_read') ? context.icons.unread : context.icons.read;
-				});
-				delete pending_entries['flux_' + queue[i]];
-			}
+			resetPendingEntries(queue);
 			badAjax(resp.status == 403);
 			return;
 		}
 		json = await resp.json();
+		if (!json || typeof json !== 'object') throw new Error('Invalid read response');
 	} catch (e) {
+		resetPendingEntries(queue);
 		console.error(e.message);
 		badAjax();
 		return;
+	} finally {
+		clearTimeout(timeout);
 	}
 	for (let i = queue.length - 1; i >= 0; i--) {
 		const div = document.getElementById('flux_' + queue[i]);
+		delete pending_entries['flux_' + queue[i]];
+		if (!div) continue; // The stream may have changed while the request was in flight.
 		const myIcons = context.icons;
 		let inc = 0;
-		if (div.classList.contains('not_read')) {
+		if (asRead && div.classList.contains('not_read')) {
 			div.classList.remove('not_read');
 			div.querySelectorAll('a.read').forEach(function (a) {
 				a.href = a.href.replace('&is_read=0', '') + '&is_read=1';
 			});
-			div.querySelectorAll('a.read > .icon').forEach(function (img) { img.outerHTML = myIcons.read; });
 			inc--;
 			if (context.auto_remove_article) {
 				removeArticle(div);
 			}
-		} else {
+		} else if (!asRead && !div.classList.contains('not_read')) {
 			div.classList.add('not_read');
 			div.classList.add('keep_unread');	// Split for IE11
 			div.querySelectorAll('a.read').forEach(function (a) {
 				a.href = a.href.replace('&is_read=1', '');
 			});
-			div.querySelectorAll('a.read > .icon').forEach(function (img) { img.outerHTML = myIcons.unread; });
 			inc++;
 		}
+		div.querySelectorAll('a.read > .icon').forEach(icon => { icon.outerHTML = asRead ? myIcons.read : myIcons.unread; });
 		const feed_link = div.querySelector('.website > a, a.website');
 		if (feed_link) {
 			const feed_url = feed_link.href;
 			const feed_id = feed_url.substr(feed_url.lastIndexOf('f_'));
 			incUnreadsFeed(div, feed_id, inc);
 		}
-		delete pending_entries['flux_' + queue[i]];
 		// Let extensions know an entry finished being marked as read/unread
 		document.dispatchEvent(new CustomEvent('freshrss:entryStateChange', {
 			detail: {
@@ -315,6 +330,7 @@ async function send_mark_read_queue(queue, asRead, callback) {
 let send_mark_read_queue_timeout = 0;
 
 function send_mark_queue_tick(callback) {
+	clearTimeout(send_mark_read_queue_timeout);
 	send_mark_read_queue_timeout = 0;
 	const queue = mark_read_queue.slice(0);
 	mark_read_queue = [];
@@ -393,14 +409,17 @@ function mark_favorite(div) {
 	const req = new XMLHttpRequest();
 	req.open('POST', url, true);
 	req.responseType = 'json';
+	req.timeout = context.network.request_timeout * 1000;
 	req.onerror = function (e) {
 		div.querySelectorAll('a.bookmark > .icon').forEach(icon => {
 			icon.src = originalIcon.src;
 			icon.alt = originalIcon.alt;
+			icon.classList.remove('spinner');
 		});
 		delete pending_entries[div.id];
 		badAjax(this.status == 403);
 	};
+	req.ontimeout = req.onabort = req.onerror;
 	req.onload = function (e) {
 		if (this.status != 200) {
 			return req.onerror(e);
@@ -2142,17 +2161,62 @@ function init_notifs_html5() {
 }
 // </notifs html5>
 
+let unreadRefreshRequest = null;
+let unreadRefreshTimer = 0;
+let unreadRefreshDelay = context.network.unread_interval * 1000;
+let unreadRefreshLastAttempt = 0;
+
+function canRefreshUnreads() {
+	return context.network.unread_interval > 0 && navigator.onLine !== false && (document.visibilityState !== 'hidden' ||
+		(context.html5_enable_notif && context.notifs_html5_permission === 'granted'));
+}
+
+function scheduleUnreadRefresh() {
+	clearTimeout(unreadRefreshTimer);
+	unreadRefreshTimer = 0;
+	if (canRefreshUnreads()) {
+		// Jitter prevents all open clients from polling the server at the same instant.
+		unreadRefreshTimer = setTimeout(refreshUnreads, unreadRefreshDelay + Math.floor(Math.random() * context.network.unread_jitter * 1000));
+	}
+}
+
+function init_unread_refresh() {
+	const resume = () => {
+		if (canRefreshUnreads() && Date.now() - unreadRefreshLastAttempt >= context.network.unread_resume_min_interval * 1000) {
+			refreshUnreads();
+		} else {
+			scheduleUnreadRefresh();
+		}
+	};
+	document.addEventListener('visibilitychange', resume);
+	window.addEventListener('online', resume);
+	window.addEventListener('offline', scheduleUnreadRefresh);
+	scheduleUnreadRefresh();
+}
+
 function refreshUnreads() {
+	clearTimeout(unreadRefreshTimer);
+	if (unreadRefreshRequest || !canRefreshUnreads()) return;
+	unreadRefreshLastAttempt = Date.now();
 	const title = document.querySelector('.category.all .title');
 	const nb_unreads_before = title ? str2int(title.getAttribute('data-unread')) : 0;
 	const req = new XMLHttpRequest();
 	req.open('GET', './?c=javascript&a=nbUnreadsPerFeed&previous_unread=' + encodeURIComponent(nb_unreads_before), true);
 	req.responseType = 'json';
+	req.timeout = context.network.unread_timeout * 1000;
+	unreadRefreshRequest = req;
+	let succeeded = false;
+	req.onloadend = () => {
+		unreadRefreshRequest = null;
+		const interval = context.network.unread_interval * 1000;
+		const maximum = Math.max(context.network.unread_interval, context.network.unread_backoff_max) * 1000;
+		unreadRefreshDelay = succeeded || context.network.unread_backoff_max === 0 ? interval : Math.min(unreadRefreshDelay * 2, maximum);
+		scheduleUnreadRefresh();
+	};
 	req.onload = function (e) {
 		const json = xmlHttpRequestJson(this);
-		if (!json) {
-			return badAjax(this.status >= 400 && this.status <= 499);
-		}
+		if (this.status !== 200 || !json || !json.feeds || !json.tags) return;
+		succeeded = true;
 		const isAll = document.querySelector('.category.all.active');
 		let new_articles = false;
 		let nbUnreadFeeds = 0;
@@ -2244,18 +2308,29 @@ function load_more_posts() {
 	const req = new XMLHttpRequest();
 	req.open('GET', url_load_more, true);
 	req.responseType = 'document';
+	req.timeout = context.network.request_timeout * 1000;
+	req.onerror = req.ontimeout = req.onabort = () => badAjax(req.status === 403);
+	req.onloadend = () => {
+		load_more = false;
+		document.getElementById('load_more')?.classList.remove('loading');
+	};
 	req.onload = function (e) {
+		const html = this.response;
+		const nextStream = html?.getElementById('stream');
+		if (this.status !== 200 || !nextStream) {
+			badAjax(this.status === 403);
+			return;
+		}
 		if (context.sort === 'rand') {
 			document.scrollingElement.scrollTop = 0;
 			remove_existing_posts();
 		}
 
-		const html = this.response;
 		const streamFooter = document.querySelector('.stream-footer');
 		const transitions = document.querySelectorAll('#stream > .transition');
 		let lastTransition = transitions.length > 0 ? transitions[transitions.length - 1] : null;
 
-		const streamAdopted = document.adoptNode(html.getElementById('stream'));
+		const streamAdopted = document.adoptNode(nextStream);
 		enforce_referrer_allowlist(streamAdopted);
 		streamAdopted.querySelectorAll('.flux, .transition').forEach(function (div) {
 			if (lastTransition !== null && div.classList.contains('transition') && div.textContent === lastTransition.textContent) {
@@ -2538,7 +2613,7 @@ function init_main_afterDOM() {
 			init_notifs_html5();
 			toggle_bigMarkAsRead_button();
 			setTimeout(faviconNbUnread, 1000);
-			setInterval(refreshUnreads, 120000);
+			init_unread_refresh();
 		}
 	}
 

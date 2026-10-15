@@ -1,0 +1,33 @@
+name: freshrss-reader
+
+services:
+  app:
+    image: ${FRESHRSS_IMAGE:-ghcr.io/guangdai/freshrss-reader:latest}
+    build:
+      context: .
+      dockerfile: Docker/Dockerfile
+    ports:
+      - "${FRESHRSS_BIND:-0.0.0.0}:${FRESHRSS_PORT:-8080}:80"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      CRON_MIN: ${CRON_MIN-*/5}
+      FRESHRSS_ENV: production
+      TRUSTED_PROXY: ${TRUSTED_PROXY:-0}
+    volumes:
+      - app-data:/var/www/FreshRSS/data
+      - app-extensions:/var/www/FreshRSS/extensions
+    restart: unless-stopped
+    init: true
+    mem_limit: ${FRESHRSS_MEMORY_LIMIT:-1024m}
+    mem_reservation: 256m
+    pids_limit: 128
+    cpus: ${FRESHRSS_CPUS:-1.0}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  app-data:
+  app-extensions:

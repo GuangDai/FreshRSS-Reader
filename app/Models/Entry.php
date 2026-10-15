@@ -4,6 +4,8 @@ declare(strict_types=1);
 class FreshRSS_Entry extends Minz_Model {
 	use FreshRSS_AttributesTrait;
 
+	public const MAX_TAGS_LENGTH = 2048;
+
 	public const STATE_READ = 1;
 	public const STATE_NOT_READ = 2;
 	public const STATE_ALL = 3;

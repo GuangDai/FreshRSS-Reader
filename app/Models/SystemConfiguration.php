@@ -21,6 +21,9 @@ declare(strict_types=1);
  * @property-read string $http_auth_auto_register_email_field
  * @property string $language
  * @property string $closed_registration_message
+ * @property array<string,int> $reader
+ * @property array<string,int|bool> $scheduler
+ * @property array<string,int> $network
  * @property array<string,int> $limits
  * @property-read string $logo_html
  * @property-read string $meta_description

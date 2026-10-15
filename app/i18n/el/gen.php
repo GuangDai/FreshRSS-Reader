@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Προαγωγή',
 		'purge' => 'Άδειασμα',
 		'refresh_opml' => 'Φρεσκάρισμα OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Αφαίρεση',
 		'rename' => 'Μετονομασία',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Προβολή ιστοσελίδας',
 		'submit' => 'Καταχώρηση',
 		'truncate' => 'Διαγραφή όλων των άρθρων',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: Νέα άρθρα!',
 		),
 		'labels_empty' => 'Χωρίς ετικέτα',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Υπάρχουν νέα άρθρα διαθέσιμα, πατήστε για ανανέωση της σελίδας.',
 		'should_be_activated' => 'Το JavaScript πρέπει να ενεργοποιηθεί',
 		'unsafe_csp_header' => 'Η επικεφαλίδα CSP που χρησιμοποιείται δεν είναι ασφαλής και το FreshRSS μπορεί να είναι ανασφαλές απέναντι σε επιθέσεις XSS. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">Δείτε τις οδηγίες χρήσης</a>',

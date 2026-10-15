@@ -151,7 +151,9 @@ class Minz_ModelPdo {
 	}
 
 	public function beginTransaction(): void {
-		$this->pdo->beginTransaction();
+		if (!$this->pdo->beginTransaction()) {
+			throw new PDOException('Could not begin database transaction');
+		}
 	}
 
 	public function inTransaction(): bool {
@@ -159,11 +161,15 @@ class Minz_ModelPdo {
 	}
 
 	public function commit(): void {
-		$this->pdo->commit();
+		if (!$this->pdo->commit()) {
+			throw new PDOException('Could not commit database transaction');
+		}
 	}
 
 	public function rollBack(): void {
-		$this->pdo->rollBack();
+		if (!$this->pdo->rollBack()) {
+			throw new PDOException('Could not roll back database transaction');
+		}
 	}
 
 	public static function clean(): void {

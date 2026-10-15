@@ -77,136 +77,22 @@ class FreshRSS_EntryDAOSQLite extends FreshRSS_EntryDAO {
 	#[\Override]
 	public function commitNewEntries(): bool {
 		$sql = <<<'SQL'
-			DROP TABLE IF EXISTS `tmp`;
-			CREATE TEMP TABLE `tmp` AS
+			DROP TABLE IF EXISTS temp.`freshrss_entry_commit`;
+			CREATE TEMP TABLE temp.`freshrss_entry_commit` AS
 				SELECT id, guid, title, author, content, link, date, `lastSeen`, hash, is_read, is_favorite, id_feed, tags, attributes
 				FROM `_entrytmp`
 				ORDER BY date, id;
 			INSERT OR IGNORE INTO `_entry`
 				(id, guid, title, author, content, link, date, `lastSeen`, hash, is_read, is_favorite, id_feed, tags, attributes)
-				SELECT rowid + (SELECT MAX(id) - COUNT(*) FROM `tmp`) AS id,
+				SELECT rowid + MAX(COALESCE((SELECT MAX(id) FROM `_entry`), 0), (SELECT MAX(id) - COUNT(*) FROM temp.`freshrss_entry_commit`)) AS id,
 					guid, title, author, content, link, date, `lastSeen`, hash, is_read, is_favorite, id_feed, tags, attributes
-				FROM `tmp` t
+				FROM temp.`freshrss_entry_commit` t
 				ORDER BY t.date, t.id;
-			DELETE FROM `_entrytmp` WHERE id <= (SELECT MAX(id) FROM `tmp`);
-			DROP TABLE IF EXISTS `tmp`;
+			DELETE FROM `_entrytmp` WHERE id <= (SELECT MAX(id) FROM temp.`freshrss_entry_commit`)
+				AND EXISTS (SELECT 1 FROM `_entry` e WHERE e.id_feed=`_entrytmp`.id_feed AND e.guid=`_entrytmp`.guid);
+			DROP TABLE IF EXISTS temp.`freshrss_entry_commit`;
 			SQL;
-		$hadTransaction = $this->pdo->inTransaction();
-		if (!$hadTransaction) {
-			$this->pdo->beginTransaction();
-		}
-		$result = $this->pdo->exec($sql) !== false;
-		if (!$result) {
-			Minz_Log::error('SQL error ' . __METHOD__ . json_encode($this->pdo->errorInfo()));
-		}
-		if (!$hadTransaction) {
-			$this->pdo->commit();
-		}
-		return $result;
+		return $this->executeAtomic($sql);
 	}
 
-	/**
-	 * Toggle the read marker on one or more article.
-	 * Then the cache is updated.
-	 *
-	 * @param numeric-string|array<numeric-string> $ids
-	 * @return int|false affected rows
-	 */
-	#[\Override]
-	public function markRead(array|string $ids, bool $is_read = true): int|false {
-		if (is_array($ids)) {	//Many IDs at once (used by API)
-			//if (true) {	//Speed heuristics	//TODO: Not implemented yet for SQLite (so always call IDs one by one)
-			$affected = 0;
-			foreach ($ids as $id) {
-				$affected += ($this->markRead($id, $is_read) ?: 0);
-			}
-			return $affected;
-			//}
-		} else {
-			FreshRSS_UserDAO::touch();
-			$this->pdo->beginTransaction();
-			$sql = <<<'SQL'
-				UPDATE `_entry` SET is_read=:is_read, `lastUserModified` = :last_user_modified
-				WHERE id=:id AND is_read=:previous_is_read
-				SQL;
-			$stm = $this->pdo->prepare($sql);
-			if ($stm === false ||
-				!$stm->bindValue(':is_read', $is_read ? 1 : 0, PDO::PARAM_INT) ||
-				!$stm->bindValue(':last_user_modified', time(), PDO::PARAM_INT) ||
-				!$stm->bindValue(':id', $ids, PDO::PARAM_STR) ||	// TODO: Test PDO::PARAM_INT on 32-bit platform
-				!$stm->bindValue(':previous_is_read', $is_read ? 0 : 1, PDO::PARAM_INT) ||
-				!$stm->execute()) {
-				$info = $stm === false ? $this->pdo->errorInfo() : $stm->errorInfo();
-				/** @var array{0:string,1:int,2:string} $info */
-				if ($this->autoUpdateDb($info)) {
-					return $this->markRead($ids, $is_read);
-				} else {
-					Minz_Log::error('SQL error ' . __METHOD__ . ' A ' . json_encode($info));
-					$this->pdo->rollBack();
-					return false;
-				}
-			}
-			$affected = $stm->rowCount();
-			if ($affected > 0) {
-				$delta = $is_read ? '-1' : '+1';
-				$sql = <<<SQL
-					UPDATE `_feed` SET `cache_nbUnreads`=`cache_nbUnreads` {$delta}
-					WHERE id=(SELECT e.id_feed FROM `_entry` e WHERE e.id=:id)
-					SQL;
-				$stm = $this->pdo->prepare($sql);
-				if ($stm === false ||
-					!$stm->bindValue(':id', $ids, PDO::PARAM_STR) ||
-					!$stm->execute()) {
-					$info = $stm === false ? $this->pdo->errorInfo() : $stm->errorInfo();
-					Minz_Log::error('SQL error ' . __METHOD__ . ' B ' . json_encode($info));
-					$this->pdo->rollBack();
-					return false;
-				}
-			}
-			$this->pdo->commit();
-			if ($affected > 0) {
-				Minz_ExtensionManager::callHook(Minz_HookType::EntriesRead, [$ids], $is_read);
-			}
-			return $affected;
-		}
-	}
-
-	/**
-	 * Mark all the articles in a tag as read.
-	 * @param int $id tag ID, or empty for targeting any tag
-	 * @param string $idMax max article ID
-	 * @return int|false affected rows
-	 */
-	#[\Override]
-	public function markReadTag(int $id = 0, string $idMax = '0', ?FreshRSS_BooleanSearch $filters = null, int $state = 0, bool $is_read = true): int|false {
-		FreshRSS_UserDAO::touch();
-		if ($idMax == 0) {
-			$idMax = uTimeString();
-			Minz_Log::debug('Calling markReadTag(0) is deprecated!');
-		}
-
-		$tagCondition = $id == 0 ? '' : 'WHERE et.id_tag = ?';
-		$sql = <<<SQL
-			UPDATE `_entry` SET is_read = ?, `lastUserModified` = ? WHERE is_read <> ? AND id <= ?
-			AND id IN (SELECT et.id_entry FROM `_entrytag` et {$tagCondition})
-			SQL;
-		$values = [$is_read ? 1 : 0, time(), $is_read ? 1 : 0, $idMax];
-		if ($id != 0) {
-			$values[] = $id;
-		}
-
-		[$searchValues, $search] = $this->sqlListEntriesWhere(alias: '', state: $state, filters: $filters);
-
-		$stm = $this->pdo->prepare($sql . $search);
-		if ($stm === false || !$stm->execute(array_merge($values, $searchValues))) {
-			$info = $stm === false ? $this->pdo->errorInfo() : $stm->errorInfo();
-			Minz_Log::error('SQL error ' . __METHOD__ . json_encode($info));
-			return false;
-		}
-		$affected = $stm->rowCount();
-		if (($affected > 0) && (!$this->updateCacheUnreads(null, null))) {
-			return false;
-		}
-		return $affected;
-	}
 }

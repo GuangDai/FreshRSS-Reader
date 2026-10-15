@@ -81,6 +81,31 @@ class LogTest extends TestCase {
 		self::assertCount(1, $this->loggedLines());
 	}
 
+	public function testRotationIgnoresStaleFileSizeAndKeepsCompleteLines(): void {
+		Minz_Log::error('initial', $this->logFile);
+		self::assertGreaterThan(0, filesize($this->logFile)); // Populate the pathname stat cache before another writer grows the log.
+		$line = "[older] [error] --- retained complete record\n";
+		file_put_contents($this->logFile, str_repeat($line, (int)(MAX_LOG_SIZE / strlen($line)) + 2), FILE_APPEND);
+		Minz_Log::error('newest', $this->logFile);
+		$content = file_get_contents($this->logFile);
+		self::assertIsString($content);
+		self::assertLessThan(MAX_LOG_SIZE, strlen($content));
+		self::assertStringStartsWith($line, $content);
+		self::assertSame(1, substr_count($content, 'Log rotate.'));
+		self::assertStringContainsString('[error] --- newest', $content);
+	}
+
+	public function testRepeatedWritesRotateWithoutClearingTheStatCache(): void {
+		$payload = str_repeat('x', (int)(MAX_LOG_SIZE / 3));
+		for ($i = 0; $i < 12; ++$i) {
+			Minz_Log::error($payload, $this->logFile);
+		}
+		$content = file_get_contents($this->logFile);
+		self::assertIsString($content);
+		self::assertLessThan(MAX_LOG_SIZE * 2, strlen($content));
+		self::assertStringContainsString('Log rotate.', $content);
+	}
+
 	/**
 	 * Temporarily registers a `system` configuration namespace so that `log_level` can be exercised,
 	 * then restores the previous state to avoid leaking configuration into other tests.

@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Quraşdırılıb',
 		'name' => 'Ad',
 		'no_configure_view' => 'Bu genişlənmə konfiqurasiya edilə bilməz.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Sistem genişlənmələri',
 			'no_rights' => 'Sistem genişlənməsi (tələb olunan icazələriniz yoxdur)',

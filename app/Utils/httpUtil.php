@@ -31,6 +31,7 @@ final class FreshRSS_http_Util {
 		if (!is_string($domain) || $domain === '') {
 			return '';
 		}
+		$domain = strtolower($domain);
 		// Once per host, as serverIsPublic() may resolve it
 		$domainWide = self::$retry_after_domain_wide[$domain] ??= Minz_Request::serverIsPublic($url);
 		$port = parse_url($url, PHP_URL_PORT);
@@ -42,21 +43,85 @@ final class FreshRSS_http_Util {
 			(empty($proxy) ? '' : '_' . urlencode($proxy)) . '.txt';
 	}
 
+	/** @return list<string> Legacy storage is included until its records have been migrated. */
+	private static function retryAfterFiles(string $file): array {
+		$name = basename($file);
+		return [$file, self::RETRY_AFTER_PATH . '0/' . $name, self::RETRY_AFTER_PATH . '1/' . $name];
+	}
+
 	/**
-	 * Clean up old Retry-After files
+	 * Remove expired Retry-After files without collecting the directory in memory.
+	 * Surviving records move to the other sweep directory, so successive bounded scans make progress.
+	 * A zero scan limit disables cleanup. Returns the number of removed files.
 	 */
-	private static function cleanRetryAfters(): void {
-		if (!is_dir(self::RETRY_AFTER_PATH)) {
-			return;
+	public static function cleanRetryAfters(?int $limit = null): int {
+		$limit ??= FreshRSS_Context::systemConf()->limits['retry_after_cleanup_limit'] ?? 1000;
+		if ($limit <= 0 || !is_dir(self::RETRY_AFTER_PATH)) {
+			return 0;
 		}
-		$files = glob(self::RETRY_AFTER_PATH . '*.txt', GLOB_NOSORT);
-		if ($files === false) {
-			return;
+		$lock = @fopen(self::RETRY_AFTER_PATH . '.lock', 'c+');
+		if ($lock === false) {
+			return 0;
 		}
-		foreach ($files as $file) {
-			if (@filemtime($file) < time()) {
-				@unlink($file);
+		try {
+			if (!flock($lock, LOCK_EX | LOCK_NB)) {
+				return 0;
 			}
+			$phase = fread($lock, 1);
+			$phase = in_array($phase, ['0', '1'], true) ? $phase : '';
+			$from = self::RETRY_AFTER_PATH . ($phase === '' ? '' : $phase . '/');
+			$next = $phase === '0' ? '1' : '0';
+			$to = self::RETRY_AFTER_PATH . $next . '/';
+			if ((!is_dir($from) && !@mkdir($from)) || (!is_dir($to) && !@mkdir($to))) {
+				return 0;
+			}
+			$directory = @opendir($from);
+			if ($directory === false) {
+				return 0;
+			}
+			$removed = 0;
+			$now = time();
+			try {
+				while ($limit > 0) {
+					$name = readdir($directory);
+					if ($name === false) {
+						// Persist only at EOF; no skipped prefix needs to be rescanned next time.
+						rewind($lock);
+						fwrite($lock, $next);
+						ftruncate($lock, 1);
+						break;
+					}
+					if ($name === '.' || $name === '..' || $name === '.lock' || $name === '0' || $name === '1') {
+						continue;
+					}
+					$file = $from . $name;
+					clearstatcache(true, $file);
+					if (!str_ends_with($name, '.txt') || is_link($file) || !is_file($file)) {
+						continue;
+					}
+					$limit--;
+					$mtime = @filemtime($file);
+					if ($mtime !== false && $mtime <= $now) {
+						if (@unlink($file)) {
+							$removed++;
+						}
+					} elseif ($mtime !== false) {
+						$destination = $to . $name;
+						clearstatcache(true, $destination);
+						$otherExpiry = @filemtime($destination);
+						if ($otherExpiry !== false && $otherExpiry > $mtime) {
+							@unlink($file);
+						} else {
+							@rename($file, $destination);
+						}
+					}
+				}
+			} finally {
+				closedir($directory);
+			}
+			return $removed;
+		} finally {
+			fclose($lock);
 		}
 	}
 
@@ -65,48 +130,86 @@ final class FreshRSS_http_Util {
 	 * @return int The timestamp of when the Retry-After expires, or 0 if not set.
 	 */
 	public static function getRetryAfter(string $url, string $proxy): int {
-		if (rand(0, 30) === 1) {	// Remove old files once in a while
-			self::cleanRetryAfters();
-		}
 		$txt = self::getRetryAfterFile($url, $proxy);
-		if ($txt === '') {
+		if ($txt === '' || !is_dir(self::RETRY_AFTER_PATH)) {
 			return 0;
 		}
-		$retryAfter = @filemtime($txt) ?: 0;
-		if ($retryAfter <= 0) {
+		$lock = @fopen(self::RETRY_AFTER_PATH . '.lock', 'c');
+		if ($lock === false) {
 			return 0;
 		}
-		if ($retryAfter < time()) {
-			@unlink($txt);
-			return 0;
+		try {
+			if (!flock($lock, LOCK_SH)) {
+				return 0;
+			}
+			$retryAfter = 0;
+			foreach (self::retryAfterFiles($txt) as $file) {
+				clearstatcache(true, $file);
+				$retryAfter = max($retryAfter, @filemtime($file) ?: 0);
+			}
+			return $retryAfter > time() ? $retryAfter : 0;
+		} finally {
+			fclose($lock);
 		}
-		return $retryAfter;
 	}
 
 	/**
-	 * Store the HTTP Retry-After header value of an HTTP `429 Too Many Requests` or `503 Service Unavailable` response.
+	 * Store Retry-After seconds or an HTTP date. Concurrent responses cannot shorten an active wait.
+	 * Configured default and maximum are seconds; zero disables the fallback or the maximum respectively.
 	 */
 	public static function setRetryAfter(string $url, string $proxy, string $retryAfter): int {
 		$txt = self::getRetryAfterFile($url, $proxy);
 		if ($txt === '') {
 			return 0;
 		}
-
 		$limits = FreshRSS_Context::systemConf()->limits;
+		$now = time();
+		$default = max(0, $limits['retry_after_default'] ?? 1500);
+		$maximum = max(0, $limits['retry_after_max'] ?? 172800);
+		$retryAfter = trim($retryAfter);
 		if (ctype_digit($retryAfter)) {
-			$retryAfter = time() + (int)$retryAfter;
+			// Clamp before addition, including numeric headers larger than PHP_INT_MAX.
+			$delay = min((int)$retryAfter, PHP_INT_MAX - $now);
+			$timestamp = $now + ($maximum > 0 ? min($delay, $maximum) : $delay);
 		} else {
-			$retryAfter = \SimplePie\Misc::parse_date($retryAfter) ?:
-				(time() + max(600, $limits['retry_after_default'] ?? 0));
+			$timestamp = \SimplePie\Misc::parse_date($retryAfter) ?: ($now + min($default, PHP_INT_MAX - $now));
+			if ($maximum > 0) {
+				$timestamp = min($timestamp, $now + min($maximum, PHP_INT_MAX - $now));
+			}
 		}
-		$retryAfter = min($retryAfter, time() + max(3600, $limits['retry_after_max'] ?? 0));
-
 		@mkdir(self::RETRY_AFTER_PATH);
-		if (!touch($txt, $retryAfter)) {
-			Minz_Log::error('Failed to set Retry-After for ' . $url);
+		$lock = @fopen(self::RETRY_AFTER_PATH . '.lock', 'c+');
+		if ($lock === false) {
 			return 0;
 		}
-		return $retryAfter;
+		try {
+			if (!flock($lock, LOCK_EX)) {
+				return 0;
+			}
+			$files = self::retryAfterFiles($txt);
+			foreach ($files as $file) {
+				clearstatcache(true, $file);
+				$timestamp = max($timestamp, @filemtime($file) ?: 0);
+			}
+			if ($timestamp <= $now) {
+				return 0;
+			}
+			$phase = fread($lock, 1) === '0' ? '1' : '0'; // New writes join the next sweep, never its unchecked prefix.
+			$directory = self::RETRY_AFTER_PATH . $phase . '/';
+			$destination = $directory . basename($txt);
+			if ((!is_dir($directory) && !@mkdir($directory)) || !@touch($destination, $timestamp)) {
+				Minz_Log::error('Failed to set Retry-After for ' . \SimplePie\Misc::url_remove_credentials($url));
+				return 0;
+			}
+			foreach ($files as $file) {
+				if ($file !== $destination) {
+					@unlink($file);
+				}
+			}
+			return $timestamp;
+		} finally {
+			fclose($lock);
+		}
 	}
 
 	/**
@@ -138,10 +241,47 @@ final class FreshRSS_http_Util {
 			// Remove HTTP authentication headers problematic for security
 			if ($k === CURLOPT_HTTPHEADER && is_array($curl_params[$k])) {
 				$curl_params[$k] = array_filter($curl_params[$k],
-					fn($header) => is_string($header) && !preg_match('/^(Remote[-_\s]*User|X[-_\s]*WebAuth[-_\s]*User)\\s*:/i', $header));
+					fn($header) => is_string($header) && !str_contains($header, "\r") && !str_contains($header, "\n") &&
+						!preg_match('/^(Remote[-_\s]*User|X[-_\s]*WebAuth[-_\s]*User)\\s*:/i', $header));
 			}
 		}
 		return $curl_params;
+	}
+
+	/**
+	 * Shared precedence for RSS cache identity and all HTTP requests: defaults, feed settings, explicit overrides.
+	 * @param array<string,mixed> $attributes
+	 * @param array<int,mixed> $overrides
+	 * @return array<int,mixed>
+	 */
+	public static function mergeCurlOptions(array $attributes = [], array $overrides = []): array {
+		$options = FreshRSS_Context::systemConf()->curl_options;
+		$timeout = $attributes['timeout'] ?? null;
+		if (is_numeric($timeout) && ($seconds = (int)$timeout) > 0) {
+			unset($options[CURLOPT_TIMEOUT_MS], $options[CURLOPT_CONNECTTIMEOUT_MS]);
+			$options[CURLOPT_TIMEOUT] = $seconds;
+			$options[CURLOPT_CONNECTTIMEOUT] = $seconds;
+		}
+		if (isset($attributes['ssl_verify'])) {
+			$options[CURLOPT_SSL_VERIFYHOST] = empty($attributes['ssl_verify']) ? 0 : 2;
+			$options[CURLOPT_SSL_VERIFYPEER] = (bool)$attributes['ssl_verify'];
+			if (empty($attributes['ssl_verify'])) {
+				$options[CURLOPT_SSL_CIPHER_LIST] = 'DEFAULT@SECLEVEL=1';
+			}
+		}
+		foreach (self::sanitizeCurlParams(is_array($attributes['curl_params'] ?? null) ? $attributes['curl_params'] : []) as $key => $value) {
+			if (is_int($key)) {
+				$options[$key] = $value;
+			}
+		}
+		$options = array_replace($options, $overrides);
+		$proxyType = $options[CURLOPT_PROXYTYPE] ?? null;
+		if (is_int($proxyType) && ($proxyType < 0 || $proxyType === 3)) {
+			// Negative values and the legacy value 3 explicitly disable the proxy, including environment defaults.
+			unset($options[CURLOPT_PROXYTYPE]);
+			$options[CURLOPT_PROXY] = '';
+		}
+		return $options;
 	}
 
 	private static function idn_to_puny(string $url): string {
@@ -471,52 +611,137 @@ final class FreshRSS_http_Util {
 	 */
 	public static function httpGet(string $url, ?string $cachePath = null, string $type = 'html', array $attributes = [], array $curl_options = []): array {
 		if (!\SimplePie\Misc::is_remote_uri($url)) {
-			Minz_Log::warning('Error fetching content: malformed URL “' . $url . '“');
-			return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+			return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Malformed HTTP URL'];
 		}
-
 		$limits = FreshRSS_Context::systemConf()->limits;
+		$maxBytes = max(0, $limits['http_max_response_bytes'] ?? 16777216);
+		$duration = max(0, intval($limits['cache_duration']));
+		$cached = $cachePath === null ? null : self::readHttpCache($cachePath, $maxBytes, time() - $duration);
+		if ($cached !== null) {
+			return ['body' => $cached, 'effective_url' => $url, 'redirect_count' => 0, 'fail' => false, 'status' => -200, 'error' => ''];
+		}
+		// A stable, hidden lock file survives atomic replacement and cache cleanup.
+		$lock = $cachePath === null ? false : @fopen(dirname($cachePath) . '/.' . basename($cachePath) . '.lock', 'c');
+		try {
+			$locked = $lock !== false && flock($lock, LOCK_EX);
+			if ($locked && $cachePath !== null) {
+				// Another worker may have refreshed the same cache while we waited.
+				$cached = self::readHttpCache($cachePath, $maxBytes, time() - $duration);
+				if ($cached !== null) {
+					return ['body' => $cached, 'effective_url' => $url, 'redirect_count' => 0, 'fail' => false, 'status' => -200, 'error' => ''];
+				}
+			}
+			$previous = $cachePath === null ? null : self::readHttpCache($cachePath, $maxBytes);
+			$result = self::httpGetUncached($url, $type, $attributes, $curl_options);
+			if ($result['status'] === 304 && $result['error'] === '') {
+				if ($previous === null) {
+					$result['fail'] = true;
+					$result['error'] = 'HTTP 304 received without a usable cached response';
+				} else {
+					$result['body'] = $previous;
+					$result['fail'] = false;
+				}
+			}
+			if (!$result['fail'] && $cachePath !== null && (!$locked || !self::writeHttpCache($cachePath, $result['body']))) {
+				Minz_Log::warning('Error saving HTTP cache for ' . \SimplePie\Misc::url_remove_credentials($url));
+			}
+			return $result;
+		} finally {
+			if ($lock !== false) {
+				fclose($lock);
+			}
+		}
+	}
+
+	/**
+	 * Remove an expired cache only while its stable publication lock is idle.
+	 * Cooperating httpGet() writers cannot replace the pathname between the age check and unlink.
+	 */
+	public static function removeExpiredCacheFile(string $path, int $cutoff): bool {
+		if (str_starts_with(basename($path), '.')) {
+			return false;
+		}
+		$lock = @fopen(dirname($path) . '/.' . basename($path) . '.lock', 'c');
+		if ($lock === false) {
+			return false;
+		}
+		try {
+			if (!flock($lock, LOCK_EX | LOCK_NB)) {
+				return false;
+			}
+			clearstatcache(true, $path);
+			if (is_link($path) || !is_file($path)) {
+				return false;
+			}
+			$mtime = @filemtime($path);
+			return $mtime !== false && $mtime < $cutoff && @unlink($path);
+		} finally {
+			fclose($lock);
+		}
+	}
+
+	/** Read size and contents from the same inode, including during concurrent cache replacement. */
+	private static function readHttpCache(string $path, int $maxBytes, int $newerThan = 0): ?string {
+		$file = @fopen($path, 'rb');
+		if ($file === false) {
+			return null;
+		}
+		try {
+			if (!flock($file, LOCK_SH)) {
+				return null;
+			}
+			$stat = fstat($file);
+			if ($stat === false || $stat['mtime'] <= $newerThan || $stat['size'] === 0 || ($maxBytes > 0 && $stat['size'] > $maxBytes)) {
+				return null;
+			}
+			$body = stream_get_contents($file, $maxBytes > 0 ? $maxBytes : null);
+			return is_string($body) && strlen($body) === $stat['size'] ? $body : null;
+		} finally {
+			fclose($file);
+		}
+	}
+
+	/** Publish a complete response with one rename; readers see either complete version. */
+	private static function writeHttpCache(string $path, string $body): bool {
+		$temporary = @tempnam(dirname($path), '.http-');
+		if ($temporary === false) {
+			return false;
+		}
+		try {
+			if (@file_put_contents($temporary, $body) !== strlen($body)) {
+				return false;
+			}
+			$permissions = @fileperms($path);
+			@chmod($temporary, ($permissions !== false ? $permissions : (0666 & ~umask())) & 0666);
+			return @rename($temporary, $path);
+		} finally {
+			if (is_file($temporary)) {
+				@unlink($temporary);
+			}
+			clearstatcache(true, $path);
+		}
+	}
+
+	/**
+	 * @param array<string,mixed> $attributes
+	 * @param array<int,mixed> $curl_options
+	 * @return array{body:string,effective_url:string,redirect_count:int,fail:bool,status:int,error:string}
+	 */
+	private static function httpGetUncached(string $url, string $type, array $attributes, array $curl_options): array {
+		$limits = FreshRSS_Context::systemConf()->limits;
+		$maxBodyBytes = max(0, $limits['http_max_response_bytes'] ?? 16777216);
+		$maxHeaderBytes = max(0, $limits['http_max_header_bytes'] ?? 65536);
 		$feed_timeout = empty($attributes['timeout']) || !is_numeric($attributes['timeout']) ? 0 : intval($attributes['timeout']);
 
-		if ($cachePath !== null) {
-			$cacheMtime = @filemtime($cachePath);
-			if ($cacheMtime !== false && $cacheMtime > time() - intval($limits['cache_duration'])) {
-				$body = @file_get_contents($cachePath);
-				if ($body != false) {
-					if (FreshRSS_Context::systemConf()->simplepie_syslog_enabled) {
-						syslog(LOG_DEBUG, 'FreshRSS uses cache for ' . \SimplePie\Misc::url_remove_credentials($url));
-					}
-					return ['body' => $body, 'effective_url' => $url, 'redirect_count' => 0, 'fail' => false, 'status' => -200, 'error' => ''];
-				}
-			}
-		}
-
-		if (rand(0, 30) === 1) {	// Remove old cache once in a while
-			cleanCache(CLEANCACHE_HOURS);
-		}
-
 		$accept = '';
-		$proxy = is_string(FreshRSS_Context::systemConf()->curl_options[CURLOPT_PROXY] ?? null) ? FreshRSS_Context::systemConf()->curl_options[CURLOPT_PROXY] : '';
-		$proxy_type = is_int(FreshRSS_Context::systemConf()->curl_options[CURLOPT_PROXYTYPE] ?? null) ?
-			FreshRSS_Context::systemConf()->curl_options[CURLOPT_PROXYTYPE] : 0;
-		$options = [];	// User-defined cURL options
-		if (is_array($attributes['curl_params'] ?? null)) {
-			$options = self::sanitizeCurlParams($attributes['curl_params']);
-			$proxy = is_string($options[CURLOPT_PROXY] ?? null) ? $options[CURLOPT_PROXY] : $proxy;
-			$proxy_type = is_int($options[CURLOPT_PROXYTYPE] ?? null) ? $options[CURLOPT_PROXYTYPE] : $proxy_type;
-			if (is_array($options[CURLOPT_HTTPHEADER] ?? null)) {
-				// Add Accept header if it is not set
-				if (preg_grep('/^Accept\\s*:/i', $options[CURLOPT_HTTPHEADER]) === false) {
-					$options[CURLOPT_HTTPHEADER][] = 'Accept: ' . $accept;
-				}
-			}
-		}
-		$proxy = is_string($curl_options[CURLOPT_PROXY] ?? null) ? $curl_options[CURLOPT_PROXY] : $proxy;
-		$proxy_type = is_int($curl_options[CURLOPT_PROXYTYPE] ?? null) ? $curl_options[CURLOPT_PROXYTYPE] : $proxy_type;
+		$curl_options = self::mergeCurlOptions($attributes, $curl_options);
+		$proxy = is_string($curl_options[CURLOPT_PROXY] ?? null) ? $curl_options[CURLOPT_PROXY] : '';
+		$proxy_type = is_int($curl_options[CURLOPT_PROXYTYPE] ?? null) ? $curl_options[CURLOPT_PROXYTYPE] : 0;
 
 		if (($retryAfter = FreshRSS_http_Util::getRetryAfter($url, $proxy)) > 0) {
 			Minz_Log::warning('For that domain, will first retry after ' . date('c', $retryAfter) . '. ' . \SimplePie\Misc::url_remove_credentials($url));
-			return ['body' => '', 'effective_url' => $url, 'redirect_count' => 0, 'fail' => true, 'status' => -429, 'error' => ''];
+			return ['body' => '', 'effective_url' => $url, 'redirect_count' => 0, 'fail' => true, 'status' => -429,
+				'error' => 'Retry-After is active until ' . date('c', $retryAfter)];
 		}
 
 		if (FreshRSS_Context::systemConf()->simplepie_syslog_enabled) {
@@ -542,14 +767,24 @@ final class FreshRSS_http_Util {
 				break;
 		}
 
+		if (is_array($curl_options[CURLOPT_HTTPHEADER] ?? null) && preg_grep('/^Accept\\s*:/i', $curl_options[CURLOPT_HTTPHEADER]) === []) {
+			$curl_options[CURLOPT_HTTPHEADER][] = 'Accept: ' . $accept;
+		}
+
 		$original_url = $url;
 		$fail = false;
 		$redirs = 0;
-		$max_redirs = $curl_options[CURLOPT_MAXREDIRS] ?? $options[CURLOPT_MAXREDIRS] ?? FreshRSS_Context::systemConf()->curl_options[CURLOPT_MAXREDIRS] ?? null;
+		$max_redirs = $curl_options[CURLOPT_MAXREDIRS] ?? null;
 		if (!is_int($max_redirs)) {
 			$max_redirs = 4;
 		}
+		if (isset($curl_options[CURLOPT_FOLLOWLOCATION]) && empty($curl_options[CURLOPT_FOLLOWLOCATION])) {
+			$max_redirs = 0;
+		}
 		while (true) {
+			if ($redirs > 0 && self::getRetryAfter($url, $proxy) > 0) {
+				return ['body' => '', 'effective_url' => $url, 'redirect_count' => $redirs, 'fail' => true, 'status' => -429, 'error' => 'Retry-After is active'];
+			}
 			$url = is_string($url) ? $url : '';
 			$resolve = [];
 			if ($proxy === '') {
@@ -557,9 +792,9 @@ final class FreshRSS_http_Util {
 				if ($resolve === null) {
 					Minz_Log::warning('Fetching this URL is not allowed, because the host’s IP is not in the allowlist [' .
 						\SimplePie\Misc::url_remove_credentials($url) . ']');
-					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Host IP is not allowed'];
 				} elseif ($resolve === false) {
-					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Host DNS resolution failed'];
 				}
 				if (!empty($resolve)) {
 					$curl_options[CURLOPT_RESOLVE] = $resolve;	// Prevent DNS rebinding
@@ -577,7 +812,7 @@ final class FreshRSS_http_Util {
 				};
 				if ($proxy_scheme === null) {
 					// Unsupported proxy type
-					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Unsupported proxy type'];
 				}
 				$proxy_url = "$proxy_scheme://$proxy"; // CURLOPT_PROXY ($proxy) is formatted as user:pass@hostname:port, with the part before @ being optional
 				$resolve = self::getCurlResolveInfo($proxy_url);
@@ -585,9 +820,9 @@ final class FreshRSS_http_Util {
 					Minz_Log::warning('Failed to fetch this URL, because the proxy’s IP is not in the allowlist [' .
 						\SimplePie\Misc::url_remove_credentials($url) . '] [' .
 						\SimplePie\Misc::url_remove_credentials($proxy_url) . ']');
-					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Proxy IP is not allowed'];
 				} elseif ($resolve === false) {
-					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+					return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Proxy DNS resolution failed'];
 				}
 				if (!empty($resolve)) {
 					// Only for the proxy domain, socks4a and socks5h DNS queries will be passed through the proxy.
@@ -599,7 +834,7 @@ final class FreshRSS_http_Util {
 			// TODO: Implement HTTP 1.1 conditional GET If-Modified-Since
 			$ch = curl_init();
 			if ($ch === false || $url === '') {
-				return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => ''];
+				return ['body' => '', 'effective_url' => '', 'redirect_count' => 0, 'fail' => true, 'status' => -500, 'error' => 'Could not initialise cURL'];
 			}
 			curl_setopt_array($ch, [
 				CURLOPT_URL => $url,
@@ -611,25 +846,6 @@ final class FreshRSS_http_Util {
 				CURLOPT_ACCEPT_ENCODING => '',	//Enable all encodings
 				//CURLOPT_VERBOSE => 1,	// To debug sent HTTP headers
 			]);
-
-			curl_setopt_array($ch, $options);
-			curl_setopt_array($ch, FreshRSS_Context::systemConf()->curl_options);
-
-			$responseHeaders = '';
-			curl_setopt($ch, CURLOPT_HEADERFUNCTION, function (\CurlHandle $ch, string $header) use (&$responseHeaders) {
-				if (trim($header) !== '') {	// Skip e.g. separation with trailer headers
-					$responseHeaders .= $header;
-				}
-				return strlen($header);
-			});
-
-			if (isset($attributes['ssl_verify'])) {
-				curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, empty($attributes['ssl_verify']) ? 0 : 2);
-				curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, (bool)$attributes['ssl_verify']);
-				if (empty($attributes['ssl_verify'])) {
-					curl_setopt($ch, CURLOPT_SSL_CIPHER_LIST, 'DEFAULT@SECLEVEL=1');
-				}
-			}
 
 			if (defined('CURLOPT_PROTOCOLS_STR') && is_int(CURLOPT_PROTOCOLS_STR)) {
 				$curl_options[CURLOPT_PROTOCOLS_STR] = 'http,https';
@@ -649,14 +865,48 @@ final class FreshRSS_http_Util {
 			curl_setopt_array($ch, $curl_options);
 			curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);	// We handle HTTP redirections manually for security
 
-			$body = curl_exec($ch);
+			$responseHeaders = '';
+			$body = '';
+			$headerBytes = 0;
+			$limitError = '';
+			curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function (\CurlHandle $ch, string $header) use (
+				&$responseHeaders,
+				&$headerBytes,
+				&$limitError,
+				$maxHeaderBytes
+			): int {
+				$length = strlen($header);
+				$headerBytes += $length;
+				if ($maxHeaderBytes > 0 && $headerBytes > $maxHeaderBytes) {
+					$limitError = 'HTTP response headers exceed http_max_header_bytes';
+					return 0;
+				}
+				if (str_starts_with($header, 'HTTP/')) {
+					$responseHeaders = ''; // Discard interim responses such as 100 Continue.
+				}
+				if (trim($header) !== '') {
+					$responseHeaders .= $header;
+				}
+				return $length;
+			});
+			curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function (\CurlHandle $ch, string $chunk) use (&$body, &$limitError, $maxBodyBytes): int {
+				$length = strlen($chunk);
+				if ($maxBodyBytes > 0 && $length > $maxBodyBytes - strlen($body)) {
+					$limitError = 'HTTP response body exceeds http_max_response_bytes';
+					return 0;
+				}
+				$body .= $chunk;
+				return $length;
+			});
+
+			$transfer = curl_exec($ch);
 			$c_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 			$c_content_type = '' . curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
 			$c_effective_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-			$c_error = curl_error($ch);
+			$c_error = $limitError !== '' ? $limitError : curl_error($ch);
 
 			$headers = [];
-			if ($body !== false) {
+			if ($transfer !== false) {
 				$responseHeaders .= "\r\n";
 				$responseHeaders = \SimplePie\HTTP\Parser::prepareHeaders($responseHeaders);
 				$parser = new \SimplePie\HTTP\Parser($responseHeaders);
@@ -665,56 +915,53 @@ final class FreshRSS_http_Util {
 				}
 			}
 
-			if (in_array($c_status, [301, 302, 303, 307, 308], true)) {
+			if ($transfer !== false && in_array($c_status, [301, 302, 303, 307, 308], true)) {
 				// Handle the redirect by making another request
 				$location = \SimplePie\Misc::absolutize_url($headers['location'] ?? $url, $url);
 				if ($location === false || !\SimplePie\Misc::is_remote_uri($location)) {
 					Minz_Log::warning('Invalid redirect location: malformed URL “' . ($headers['location'] ?? $url) . '“');
+					$fail = true;
+					$body = '';
+					$c_error = 'Invalid redirect location';
 					break;
 				}
 				if (!self::compareURLOrigins($url, $location)) {
 					unset($curl_options[CURLOPT_COOKIE]);
-					unset($curl_options[CURLOPT_USERPWD]);
-					unset($options[CURLOPT_COOKIE]);
-					unset($options[CURLOPT_USERPWD]);
-					if (is_array($options[CURLOPT_HTTPHEADER] ?? null)) {
-						$options[CURLOPT_HTTPHEADER] = array_filter($options[CURLOPT_HTTPHEADER], fn(mixed $header): bool =>
-							is_string($header) && !preg_match('/^(Cookie|Authorization)\\s*:/i', $header));
-					}
+					unset($curl_options[CURLOPT_USERPWD], $curl_options[CURLOPT_USERNAME], $curl_options[CURLOPT_PASSWORD]);
+
 					if (is_array($curl_options[CURLOPT_HTTPHEADER] ?? null)) {
 						$curl_options[CURLOPT_HTTPHEADER] = array_filter($curl_options[CURLOPT_HTTPHEADER], fn(mixed $header): bool =>
 							is_string($header) && !preg_match('/^(Cookie|Authorization)\\s*:/i', $header));
 					}
 				}
-				if ($max_redirs >= 0) {
-					$redirs++;
-				}
-				if ($redirs > $max_redirs) {
+				if ($max_redirs >= 0 && $redirs >= $max_redirs) {
+					$fail = true;
+					$body = '';
+					$c_error = 'Too many redirects';
 					Minz_Log::warning('Error fetching content: Too many redirects were hit [' . \SimplePie\Misc::url_remove_credentials($original_url) . ']');
 					break;
 				}
-				if ((isset($options[CURLOPT_POST]) || isset($curl_options[CURLOPT_POST])) &&
+				if (isset($curl_options[CURLOPT_POST]) &&
 					in_array($c_status, [301, 302, 303], true)) {	// Not for 307 and 308, which must not change the HTTP method
 					unset($curl_options[CURLOPT_POST]);
 					unset($curl_options[CURLOPT_POSTFIELDS]);
-					unset($options[CURLOPT_POST]);
-					unset($options[CURLOPT_POSTFIELDS]);
-					if (is_array($options[CURLOPT_HTTPHEADER] ?? null)) {
-						$options[CURLOPT_HTTPHEADER] = array_filter($options[CURLOPT_HTTPHEADER], fn(mixed $header): bool =>
-							is_string($header) && !str_starts_with(strtolower(trim($header)), 'content-type:'));
-					}
+
 					if (is_array($curl_options[CURLOPT_HTTPHEADER] ?? null)) {
 						$curl_options[CURLOPT_HTTPHEADER] = array_filter($curl_options[CURLOPT_HTTPHEADER], fn(mixed $header): bool =>
 							is_string($header) && !str_starts_with(strtolower(trim($header)), 'content-type:'));
 					}
 				}
+				$redirs++;
 				$url = $location;
 				continue;
 			}
 
-			$fail = $c_status != 200 || $c_error != '' || $body === false;
+			$fail = !in_array($c_status, [200, 304], true) || $c_error !== '' || $transfer === false;
 			if ($fail) {
 				$body = '';
+				if ($c_error === '') {
+					$c_error = 'HTTP ' . $c_status;
+				}
 				Minz_Log::warning('Error fetching content: HTTP code ' . $c_status . ': ' . $c_error . ' ' . $url);
 				if (in_array($c_status, [429, 503], true)) {
 					$retryAfter = FreshRSS_http_Util::setRetryAfter($url, $proxy, $headers['retry-after'] ?? '');
@@ -727,7 +974,7 @@ final class FreshRSS_http_Util {
 						$errorMessage .= ' We may retry after ' . date('c', $retryAfter);
 					}
 				}
-			} elseif (!is_string($body) || strlen($body) === 0) { // TODO: Implement HTTP 410 Gone
+			} elseif (strlen($body) === 0) { // TODO: Implement HTTP 410 Gone
 				$body = '';
 			} else {
 				if (in_array($type, ['html', 'json', 'opml', 'xml'], true)) {
@@ -748,11 +995,7 @@ final class FreshRSS_http_Util {
 			break;
 		}
 
-		if ($cachePath !== null && file_put_contents($cachePath, $body) === false) {
-			Minz_Log::warning("Error saving cache for $url");
-		}
-
-		return ['body' => is_string($body) ? $body : '', 'effective_url' => $c_effective_url, 'redirect_count' => $redirs,
+		return ['body' => $body, 'effective_url' => $c_effective_url, 'redirect_count' => $redirs,
 			'fail' => $fail, 'status' => $c_status, 'error' => $c_error];
 	}
 

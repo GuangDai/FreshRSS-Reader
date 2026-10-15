@@ -1,0 +1,105 @@
+<?php
+	declare(strict_types=1);
+
+	use FreshRSS\Services\Extraction\ExtractionEngine;
+
+	/** @var WebExtractionExtension $this */
+	$labelKeys = ['saved', 'draft', 'empty_list', 'edit', 'remove_recipe', 'applied', 'removed', 'undone', 'advanced_recipe',
+		'advanced_only', 'advanced_target', 'invalid_json', 'unsafe_numbers', 'targets_required', 'fields_required',
+		'attribute_required', 'required_selector', 'editor_stale', 'limit_exceeded', 'field_title', 'field_content', 'field_author',
+		'field_link', 'format_html', 'format_json', 'feed_default', 'configured_count', 'preview_success', 'preview_failed',
+		'no_value', 'match_trace', 'trace_matched', 'trace_empty', 'trace_error', 'mode_text', 'mode_html', 'mode_attribute'];
+	$labels = [];
+	foreach ($labelKeys as $key) {
+		$labels[$key] = _t('ext.web_extraction.' . $key);
+	}
+	$stored = json_encode((object)($this->getUserConfigurationArray('recipes') ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	$current = json_encode(json_decode($this->configurationJson), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	$isDraft = $stored !== $current;
+?>
+<form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post" data-auto-leave-validation="1"
+	data-web-extraction data-extraction-draft="<?= $isDraft ? '1' : '0' ?>" data-max-feed-id="<?= PHP_INT_MAX ?>" class="extraction-workbench" novalidate>
+	<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+	<input type="hidden" name="configuration_version" value="<?= htmlspecialchars($this->configurationVersion, ENT_QUOTES, 'UTF-8') ?>" />
+	<input type="hidden" data-editor-dirty data-leave-validation="0" value="0" />
+	<template data-extraction-labels><?= htmlspecialchars(json_encode($labels, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), ENT_NOQUOTES, 'UTF-8') ?></template>
+	<div class="extraction-heading">
+		<div><p><?= _t('ext.web_extraction.intro') ?></p><span data-draft-status class="extraction-help" role="status"><?= _t('ext.web_extraction.' . ($isDraft ? 'draft' : 'saved')) ?></span></div>
+		<button type="submit" class="btn btn-important" data-save-recipes><?= _t('ext.web_extraction.save_recipes') ?></button>
+	</div>
+	<noscript><p><?= _t('ext.web_extraction.no_javascript') ?></p></noscript>
+	<div data-ui-notice class="extraction-notice" role="status" hidden></div>
+	<div data-ui-error class="extraction-error" role="alert" hidden></div>
+	<?php foreach ($this->configurationErrors as $error) { ?>
+	<p class="alert alert-error extraction-error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
+	<?php } ?>
+	<?php if ($this->latestConfigurationJson !== '') { ?>
+	<details id="extraction-latest" class="extraction-card" open>
+		<summary><?= _t('ext.web_extraction.latest') ?></summary>
+		<pre><?= htmlspecialchars($this->latestConfigurationJson, ENT_QUOTES, 'UTF-8') ?></pre>
+	</details>
+	<?php } ?>
+	<section data-ui-only class="extraction-card" hidden aria-labelledby="extraction-list-heading">
+		<div class="extraction-heading"><h3 id="extraction-list-heading"><?= _t('ext.web_extraction.recipe_list') ?></h3>
+			<div class="extraction-toolbar"><button type="button" class="btn" data-command="new"><?= _t('ext.web_extraction.new_recipe') ?></button><button type="button" class="btn" data-command="undo" disabled><?= _t('ext.web_extraction.undo') ?></button></div>
+		</div>
+		<ul data-recipe-list class="extraction-list"></ul>
+		<p data-recipe-empty class="extraction-help"><?= _t('ext.web_extraction.empty_list') ?></p>
+	</section>
+	<section data-recipe-editor class="extraction-card" hidden aria-labelledby="extraction-editor-heading">
+		<h3 id="extraction-editor-heading"><?= _t('ext.web_extraction.editor') ?></h3>
+		<div class="extraction-toolbar"><button type="button" class="btn" data-command="article-preset"><?= _t('ext.web_extraction.preset_article') ?></button><button type="button" class="btn" data-command="json-preset"><?= _t('ext.web_extraction.preset_json') ?></button></div>
+		<p class="extraction-help"><?= _t('ext.web_extraction.presets_help') ?></p>
+		<div data-builder-error class="extraction-error" role="alert" hidden></div>
+		<div class="extraction-grid">
+			<label class="extraction-label extraction-wide" for="extraction-targets"><?= _t('ext.web_extraction.feed_targets') ?>
+				<input id="extraction-targets" name="builder_targets" value="<?= htmlspecialchars(Minz_Request::paramString('builder_targets'), ENT_QUOTES, 'UTF-8') ?>" placeholder="123, 456" autocomplete="off" />
+				<span class="extraction-help"><?= _t('ext.web_extraction.feed_targets_help') ?></span>
+			</label>
+			<details class="extraction-wide"><summary><?= _t('ext.web_extraction.choose_feeds') ?></summary>
+				<label class="extraction-label"><?= _t('ext.web_extraction.choose_feeds') ?><select data-feed-choices multiple size="5">
+				<?php foreach (FreshRSS_Context::feeds() as $feed) { ?>
+					<option value="<?= $feed->id() ?>"><?= $feed->id() ?> · <?= $feed->name() ?></option>
+				<?php } ?>
+				</select></label>
+				<button type="button" class="btn" data-command="add-feeds"><?= _t('ext.web_extraction.add_selected') ?></button>
+			</details>
+			<label class="extraction-label extraction-wide" for="extraction-format"><?= _t('ext.web_extraction.format') ?>
+				<select id="extraction-format"><option value="html"><?= _t('ext.web_extraction.format_html') ?></option><option value="json"><?= _t('ext.web_extraction.format_json') ?></option></select>
+			</label>
+			<?php foreach (['title', 'content', 'author', 'link'] as $field) { ?>
+			<fieldset class="extraction-field" data-extraction-field="<?= $field ?>"><legend><?= _t('ext.web_extraction.field_' . $field) ?></legend>
+				<div class="extraction-grid">
+					<label class="extraction-label"><?= _t('ext.web_extraction.method') ?><select data-field-type><option value="css">CSS</option><option value="xpath">XPath</option><option value="jsonld">JSON-LD</option><option value="json">JSON</option></select></label>
+					<label class="extraction-label"><?= _t('ext.web_extraction.mode') ?><select data-field-mode><option value="text"><?= _t('ext.web_extraction.mode_text') ?></option><option value="html"><?= _t('ext.web_extraction.mode_html') ?></option><option value="attribute"><?= _t('ext.web_extraction.mode_attribute') ?></option></select></label>
+					<label class="extraction-label extraction-wide"><?= _t('ext.web_extraction.selectors') ?><textarea data-field-selectors rows="2" spellcheck="false"></textarea><span class="extraction-help"><?= _t('ext.web_extraction.selector_help') ?></span></label>
+					<label class="extraction-label extraction-wide" data-attribute-label hidden><?= _t('ext.web_extraction.attribute') ?><input data-field-attribute type="text" autocomplete="off" /></label>
+				</div>
+				<div class="extraction-toolbar"><label class="extraction-check"><input type="checkbox" data-field-all /> <?= _t('ext.web_extraction.all_matches') ?></label><label class="extraction-check"><input type="checkbox" data-field-required /> <?= _t('ext.web_extraction.required') ?></label></div>
+			</fieldset>
+			<?php } ?>
+			<label class="extraction-label extraction-wide" data-cleanup-label><?= _t('ext.web_extraction.cleanup') ?><textarea data-remove-selectors rows="2" spellcheck="false"></textarea><span class="extraction-help"><?= _t('ext.web_extraction.cleanup_help') ?></span></label>
+		</div>
+		<div class="extraction-toolbar"><button type="button" class="btn btn-important" data-command="apply"><?= _t('ext.web_extraction.apply_recipe') ?></button><button type="button" class="btn" data-command="cancel"><?= _t('ext.web_extraction.cancel_editor') ?></button></div>
+	</section>
+	<details class="extraction-card" data-preview-panel>
+		<summary><?= _t('ext.web_extraction.preview_panel') ?></summary>
+		<div class="extraction-grid">
+			<label class="extraction-label extraction-wide" for="extraction-feed"><?= _t('ext.web_extraction.feed') ?><input id="extraction-feed" name="feed_id" value="<?= htmlspecialchars($this->previewFeed, ENT_QUOTES, 'UTF-8') ?>" /></label>
+			<label class="extraction-label extraction-wide" for="extraction-source"><?= _t('ext.web_extraction.source') ?><textarea id="extraction-source" name="source" rows="8" spellcheck="false" class="extraction-code"><?= htmlspecialchars($this->previewSource, ENT_QUOTES, 'UTF-8') ?></textarea></label>
+		</div>
+		<p class="extraction-help"><?= _t('ext.web_extraction.local') ?></p>
+		<button type="submit" class="btn" name="preview" value="1"><?= _t('ext.web_extraction.preview') ?></button>
+	</details>
+	<?php if ($this->previewResult !== '') { ?>
+	<section data-preview-fields class="extraction-card" hidden aria-label="<?= _t('ext.web_extraction.preview_results') ?>"></section>
+	<details data-result-details class="extraction-card" open><summary><?= _t('ext.web_extraction.raw_result') ?></summary><pre><?= htmlspecialchars($this->previewResult, ENT_QUOTES, 'UTF-8') ?></pre></details>
+	<?php } ?>
+	<details data-extraction-advanced class="extraction-card" open>
+		<summary><?= _t('ext.web_extraction.advanced') ?></summary>
+		<p class="extraction-help"><?= _t('ext.web_extraction.advanced_help') ?></p>
+		<label class="extraction-label" for="extraction-recipes"><?= _t('ext.web_extraction.recipes') ?><textarea id="extraction-recipes" name="recipes" rows="16" spellcheck="false" class="extraction-code"><?= htmlspecialchars($this->configurationJson, ENT_QUOTES, 'UTF-8') ?></textarea></label>
+		<details><summary><?= _t('ext.web_extraction.example') ?></summary><pre><?= htmlspecialchars(json_encode(['123' => ExtractionEngine::presets()['article']], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '', ENT_QUOTES, 'UTF-8') ?></pre></details>
+	</details>
+	<p class="extraction-help"><?= _t('ext.web_extraction.description') ?></p>
+</form>

@@ -1,0 +1,28 @@
+<?php
+	declare(strict_types=1);
+	/** @var ReaderComfortExtension $this */
+	$preferences = $this->preferences();
+?>
+<form action="<?= _url('extension', 'configure', 'e', urlencode($this->getName())) ?>" method="post" data-auto-leave-validation="1" data-reader-comfort>
+	<input type="hidden" name="_csrf" value="<?= FreshRSS_Auth::csrfToken() ?>" />
+	<p><?= _t('ext.reader_comfort.description') ?></p>
+	<?php foreach (ReaderComfortExtension::SETTINGS as $key => $setting) { ?>
+	<div class="form-group">
+		<label class="group-name" for="reader-<?= $key ?>"><?= _t('ext.reader_comfort.' . $key) ?></label>
+		<div class="group-controls">
+			<input type="range" id="reader-<?= $key ?>" name="<?= $key ?>" min="<?= $setting['min'] ?>" max="<?= $setting['max'] ?>" value="<?= $preferences[$key] ?>" />
+			<output for="reader-<?= $key ?>"><?= $preferences[$key] ?></output> <?= $setting['unit'] ?>
+		</div>
+	</div>
+	<?php } ?>
+	<div class="reader-preview content">
+		<h2><?= _t('ext.reader_comfort.preview_title') ?></h2>
+		<div class="text"><p><?= _t('ext.reader_comfort.preview_text') ?></p></div>
+	</div>
+	<div class="form-group form-actions">
+		<div class="group-controls">
+			<button type="submit" class="btn btn-important"><?= _t('gen.action.submit') ?></button>
+			<button type="reset" class="btn"><?= _t('gen.action.cancel') ?></button>
+		</div>
+	</div>
+</form>

@@ -1,0 +1,26 @@
+.reader-preview.content {
+	margin: 1.5rem auto;
+	padding: 1rem;
+	max-width: min(100%, var(--reader-width, 800px));
+	border: 1px solid currentcolor;
+	border-radius: 0.5rem;
+}
+
+.reader-preview .text {
+	padding: 0;
+	font-size: var(--reader-font-size, 18px);
+	line-height: var(--reader-line-height, 1.75);
+}
+
+[data-reader-comfort] input[type="range"] {
+	max-width: 100%;
+	width: 18rem;
+	min-height: 44px;
+	vertical-align: middle;
+}
+
+[data-reader-comfort] output {
+	display: inline-block;
+	min-width: 3ch;
+	font-variant-numeric: tabular-nums;
+}

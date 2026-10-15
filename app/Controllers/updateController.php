@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use FreshRSS\Utils\Http\SettingsEmbedPolicy;
+
 class FreshRSS_update_Controller extends FreshRSS_ActionController {
 
 	private const LASTUPDATEFILE = 'last_update.txt';
@@ -324,6 +326,7 @@ class FreshRSS_update_Controller extends FreshRSS_ActionController {
 				Minz_Log::notice(_t('feedback.update.finished'));
 				Minz_Request::good(
 					_t('feedback.update.finished'),
+					SettingsEmbedPolicy::active() ? ['c' => 'update', 'a' => 'index'] : [],
 					showNotification: FreshRSS_Context::userConf()->good_notification_timeout > 0
 				);
 			} else {

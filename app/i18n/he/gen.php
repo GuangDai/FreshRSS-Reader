@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Promote',	// TODO
 		'purge' => 'Purge',	// TODO
 		'refresh_opml' => 'Refresh OPML',	// TODO
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Remove',	// TODO
 		'rename' => 'Rename',	// TODO
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'ראו אתר',
 		'submit' => 'אישור',
 		'truncate' => 'מחיקת כל המאמרים',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: מאמרים חדשים!',
 		),
 		'labels_empty' => 'No labels',	// TODO
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'מאמרים חדשים זמינים, לחצו לרענון העמוד.',
 		'should_be_activated' => 'חובה להפעיל JavaScript',
 		'unsafe_csp_header' => 'The CSP header in use is unsafe and FreshRSS may be vulnerable to XSS attacks. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">See documentation</a>',	// TODO

@@ -1,0 +1,53 @@
+:root {
+	--reader-font-size: 18px;
+	--reader-line-height: 1.75;
+	--reader-width: 800px;
+	--reader-density: 8px;
+}
+
+#stream .content {
+	max-width: min(100%, var(--reader-width));
+}
+
+#stream .content .text {
+	font-size: var(--reader-font-size);
+	line-height: var(--reader-line-height);
+	overflow-wrap: anywhere;
+}
+
+#stream .flux .flux_header {
+	padding-block: var(--reader-density);
+}
+
+#stream .content .text pre {
+	overflow-x: auto;
+	overflow-wrap: normal;
+}
+
+#stream .content .text img,
+#stream .content .text video {
+	max-width: 100%;
+	height: auto;
+}
+
+#stream :focus-visible {
+	outline: 2px solid currentcolor;
+	outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#stream *,
+	#panel,
+	html {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+@media (max-width: 640px) {
+	#stream .content .text {
+		padding-inline: 1rem;
+	}
+}

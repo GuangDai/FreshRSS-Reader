@@ -52,4 +52,9 @@ export default [
 			}],
 		},
 	},
+	{
+		files: ['p/scripts/reader/**/*.js'],
+		ignores: ['p/scripts/reader/embed/**/*.js'],
+		languageOptions: { sourceType: 'module' },
+	},
 ];

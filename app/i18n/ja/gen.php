@@ -44,8 +44,10 @@ return array(
 		'promote' => '昇格',
 		'purge' => '不要なデータの削除',
 		'refresh_opml' => 'OPMLを更新する',
+		'reload' => 'Reload',	// TODO
 		'remove' => '消去',
 		'rename' => '名前を変更する',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Webサイトを開く',
 		'submit' => '保存',
 		'truncate' => 'すべての記事を消去する',
@@ -177,6 +179,7 @@ return array(
 			'title_new_articles' => 'FreshRSS：新着記事',
 		),
 		'labels_empty' => 'ラベルがありません',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => '新しい記事があります。クリックしてページを更新してください。',
 		'should_be_activated' => 'JavaScriptを有効にする必要があります。',
 		'unsafe_csp_header' => '使用中のCSPヘッダーは安全ではないため、FreshRSSがXSS攻撃に対して脆弱になる可能性があります。<a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">ドキュメント</a>を参照してください。',

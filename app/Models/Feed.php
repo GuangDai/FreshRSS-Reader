@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use FreshRSS\Infrastructure\Concurrency\UserWorkLock;
+
 class FreshRSS_Feed extends Minz_Model {
 	use FreshRSS_AttributesTrait, FreshRSS_FilterActionsTrait;
 
@@ -44,6 +46,7 @@ class FreshRSS_Feed extends Minz_Model {
 	public const PRIORITY_ARCHIVED = -10;
 
 	public const TTL_DEFAULT = 0;
+	public const TTL_MAX = 100_000_000;
 
 	public const ARCHIVING_RETENTION_COUNT_LIMIT = 10000;
 	public const ARCHIVING_RETENTION_PERIOD = 'P3M';
@@ -67,7 +70,8 @@ class FreshRSS_Feed extends Minz_Model {
 	private bool $mute = false;
 	private string $hash = '';
 	private string $hashFavicon = '';
-	private string $lockPath = '';
+	/** @var resource|null Held until unlock or process exit; lock files must never be unlinked. */
+	private $lockHandle = null;
 	private string $hubUrl = '';
 	private string $selfUrl = '';
 
@@ -309,6 +313,18 @@ class FreshRSS_Feed extends Minz_Model {
 	}
 	public function lastUpdate(): int {
 		return $this->lastUpdate;
+	}
+
+	/** Configuration checked again after downloading, before applying any fetched content.
+	 * @return array<string,mixed>
+	 */
+	public function refreshConfiguration(): array {
+		return [
+			'url' => $this->url, 'kind' => $this->kind, 'category' => $this->categoryId(), 'name' => $this->name,
+			'website' => $this->website, 'description' => $this->description, 'priority' => $this->priority,
+			'pathEntries' => $this->pathEntries, 'httpAuth' => $this->httpAuth, 'ttl' => $this->ttl(raw: true),
+			'attributes' => $this->attributes(),
+		];
 	}
 	public function priority(): int {
 		return $this->priority;
@@ -571,7 +587,7 @@ class FreshRSS_Feed extends Minz_Model {
 		$this->mute = $value;
 	}
 	public function _ttl(int $value): void {
-		$value = min($value, 100_000_000);
+		$value = max(-self::TTL_MAX, min($value, self::TTL_MAX));
 		$this->ttl = abs($value);
 		$this->mute = $value < self::TTL_DEFAULT;
 	}
@@ -625,11 +641,11 @@ class FreshRSS_Feed extends Minz_Model {
 				}
 				if ($this->attributeBoolean('clear_cache')) {
 					// Do not use `$simplePie->enable_cache(false);` as it would prevent caching in multiuser context
-					$this->clearCache();
+					UserWorkLock::run(fn() => $this->clearCache());
 				}
-				Minz_ExtensionManager::callHook(Minz_HookType::SimplepieBeforeInit, $simplePie, $this);
+				UserWorkLock::run(fn() => Minz_ExtensionManager::callHook(Minz_HookType::SimplepieBeforeInit, $simplePie, $this));
 				$simplePieResult = $simplePie->init();
-				Minz_ExtensionManager::callHook(Minz_HookType::SimplepieAfterInit, $simplePie, $this, $simplePieResult);
+				UserWorkLock::run(fn() => Minz_ExtensionManager::callHook(Minz_HookType::SimplepieAfterInit, $simplePie, $this, $simplePieResult));
 
 				if ($simplePieResult === false || $simplePie->get_hash() === '' || !empty($simplePie->error())) {
 					if ($simplePie->status_code() === 429) {
@@ -1345,20 +1361,30 @@ class FreshRSS_Feed extends Minz_Model {
 	}
 
 	public function lock(): bool {
-		$this->lockPath = TMP_PATH . '/' . $this->hash() . '.freshrss.lock';
-		if (file_exists($this->lockPath) && ((time() - (@filemtime($this->lockPath) ?: 0)) > 3600)) {
-			@unlink($this->lockPath);
-		}
-		if (($handle = @fopen($this->lockPath, 'x')) === false) {
+		if (is_resource($this->lockHandle)) {
 			return false;
 		}
-		//register_shutdown_function('unlink', $this->lockPath);
-		@fclose($handle);
+		try {
+			$handle = actualize_acquire_lock(TMP_PATH . '/' . $this->hash() . '.freshrss.lock');
+		} catch (RuntimeException $e) {
+			Minz_Log::error($e->getMessage());
+			return false;
+		}
+		if ($handle === false) {
+			return false;
+		}
+		$this->lockHandle = $handle;
 		return true;
 	}
 
 	public function unlock(): bool {
-		return @unlink($this->lockPath);
+		if (!is_resource($this->lockHandle)) {
+			return false;
+		}
+		flock($this->lockHandle, LOCK_UN);
+		fclose($this->lockHandle);
+		$this->lockHandle = null;
+		return true;
 	}
 
 	//<WebSub>

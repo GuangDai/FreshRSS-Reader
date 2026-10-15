@@ -27,6 +27,13 @@ More information can be found in [README](README.md) and in the [documentation](
 * `app/Controllers/` – Controllers extend `FreshRSS_ActionController`, named as `{name}Controller.php` with class `FreshRSS_{name}_Controller`
 * `app/Models/` – Domain models extend `Minz_Model`.
 	* DAOs may have some database-specific inheritance, e.g.: `*DAO.php` (base or MySQL), `*DAOSQLite.php` (SQLite), `*DAOPGSQL.php` (PostgreSQL)
+* Namespaced feature classes use `FreshRSS\` mapped directly to `app/`, with one class per file and matching PascalCase filenames.
+	* `app/Services/{Reader,Subscriptions,Extensions,Rules,Extraction,Refresh,Network}/` – Feature services and configuration contracts
+	* `app/Infrastructure/{Concurrency,Refresh}/` – Process locks and durable queue storage
+	* `app/Models/{Subscriptions,Rules}/` – Subscription persistence and rule input models
+	* `app/Exceptions/{Reader,Rules}/` – Feature exceptions
+	* `app/Utils/{Http,Html}/` – HTTP input and embedding policies, CSS selector conversion
+* Existing underscore-named classes retain the framework's original autoloading conventions.
 * `app/views/{controller}/` – View templates are `.phtml` files mixing PHP and HTML
 * `app/views/helpers/` – Reusable view elements with `$this->partial('name')`
 * `lib/core-extensions/` or `extensions/` – FreshRSS extensions
@@ -37,6 +44,10 @@ More information can be found in [README](README.md) and in the [documentation](
 	* `p/api/greader.php` – Primary API for mobile clients
 	* `p/api/pshb.php` – Receive realtime pushes via WebSub
 	* `p/themes/` – UI themes
+	* `p/scripts/reader/` – Reader entry `app.js`, grouped into `core/`, `articles/`, `subscriptions/`, `appearance/`, `settings/`, and `embed/`
+	* `p/styles/reader/` – Reader, theme, settings, and embedded form styles
+
+See [local architecture](docs/zh-CN/development/architecture.md) for directory responsibilities and naming, and [the test guide](tests/README.md) for test suites and prerequisites.
 
 ### Configuration data
 

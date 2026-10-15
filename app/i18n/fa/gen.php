@@ -44,8 +44,10 @@ return array(
 		'promote' => ' ترویج',
 		'purge' => ' پاکسازی',
 		'refresh_opml' => ' OPML را بازخوانی کنید',
+		'reload' => 'Reload',	// TODO
 		'remove' => ' حذف کنید',
 		'rename' => ' تغییر نام',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'به وب‌سایت مراجعه کنید',
 		'submit' => ' ارسال کنید',
 		'truncate' => ' تمام مقالات را حذف کنید',
@@ -185,6 +187,7 @@ return array(
 			'title_new_articles' => ' FreshRSS: مقالات جدید!',
 		),
 		'labels_empty' => 'بدون برچسب',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'مقالات جدیدی موجود است',
 		'should_be_activated' => ' جاوا اسکریپت باید فعال باشد',
 		'unsafe_csp_header' => 'سرآیند CSP فعلی امن نیست و FreshRSS ممکن است در برابر حملات XSS آسیب‌پذیر باشد. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">مستندات را ببینید</a>',

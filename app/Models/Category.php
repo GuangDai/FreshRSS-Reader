@@ -20,9 +20,9 @@ class FreshRSS_Category extends Minz_Model {
 	private int $nbFeeds = -1;
 	/** Number of unread articles in feeds with visibility FreshRSS_Feed::PRIORITY_FEED */
 	private int $nbNotRead = -1;
-	/** @var array<int,FreshRSS_Feed>|null where the key is the feed ID */
+	/** @var array<int,FreshRSS_Feed>|null Feed IDs as keys; unsaved feeds use negative keys. */
 	private ?array $feeds = null;
-	private bool|int $hasFeedsWithError = false;
+	private bool $hasFeedsWithError = false;
 	private int $lastUpdate = 0;
 	private bool $error = false;
 
@@ -34,16 +34,6 @@ class FreshRSS_Category extends Minz_Model {
 		$this->_name($name);
 		if ($feeds !== null) {
 			$this->_feeds($feeds);
-			$this->nbFeeds = 0;
-			$this->nbNotRead = 0;
-			foreach ($feeds as $feed) {
-				$feed->_category($this);
-				$this->nbFeeds++;
-				if ($feed->priority() > FreshRSS_Feed::PRIORITY_HIDDEN) {
-					$this->nbNotRead += $feed->nbNotRead();
-					$this->hasFeedsWithError |= ($feed->inError() && !$feed->mute());
-				}
-			}
 		}
 	}
 
@@ -93,7 +83,7 @@ class FreshRSS_Category extends Minz_Model {
 	 * @throws Minz_PDOConnectionException
 	 */
 	public function nbNotRead(int $minPriority = FreshRSS_Feed::PRIORITY_FEED): int {
-		if ($this->nbNotRead > 0 && $minPriority === FreshRSS_Feed::PRIORITY_FEED) {
+		if ($this->nbNotRead >= 0 && $minPriority === FreshRSS_Feed::PRIORITY_FEED) {
 			return $this->nbNotRead;
 		}
 		if ($this->feeds === null) {
@@ -109,6 +99,9 @@ class FreshRSS_Category extends Minz_Model {
 			if ($feed->priority() >= $minPriority) {
 				$nb += $feed->nbNotRead();
 			}
+		}
+		if ($minPriority === FreshRSS_Feed::PRIORITY_FEED) {
+			$this->nbNotRead = $nb;
 		}
 		return $nb;
 	}
@@ -131,23 +124,13 @@ class FreshRSS_Category extends Minz_Model {
 	public function feeds(): array {
 		if ($this->feeds === null) {
 			$feedDAO = FreshRSS_Factory::createFeedDao();
-			$this->feeds = $feedDAO->listByCategory($this->id());
-			$this->nbFeeds = 0;
-			$this->nbNotRead = 0;
-			foreach ($this->feeds as $feed) {
-				$this->nbFeeds++;
-				if ($feed->priority() > FreshRSS_Feed::PRIORITY_HIDDEN) {
-					$this->nbNotRead += $feed->nbNotRead();
-					$this->hasFeedsWithError |= ($feed->inError() && !$feed->mute());
-				}
-			}
-			$this->sortFeeds();
+			$this->_feeds($feedDAO->listByCategory($this->id()));
 		}
 		return $this->feeds ?? [];
 	}
 
 	public function hasFeedsWithError(): bool {
-		return (bool)($this->hasFeedsWithError);
+		return $this->hasFeedsWithError;
 	}
 
 	public function _id(int $id): void {
@@ -172,7 +155,20 @@ class FreshRSS_Category extends Minz_Model {
 		if (!is_array($values)) {
 			$values = [$values];
 		}
-		$this->feeds = array_values($values);
+		$this->feeds = [];
+		$unsavedId = 0;
+		foreach ($values as $feed) {
+			$this->feeds[$feed->id() === 0 ? --$unsavedId : $feed->id()] = $feed;
+		}
+		$this->nbFeeds = count($this->feeds);
+		$this->nbNotRead = -1;
+		$this->hasFeedsWithError = false;
+		foreach ($this->feeds as $feed) {
+			$feed->_category($this);
+			if ($feed->priority() > FreshRSS_Feed::PRIORITY_HIDDEN && $feed->inError() && !$feed->mute()) {
+				$this->hasFeedsWithError = true;
+			}
+		}
 		$this->sortFeeds();
 	}
 
@@ -187,17 +183,9 @@ class FreshRSS_Category extends Minz_Model {
 	 * To manually add feeds to this category (not committing to database).
 	 */
 	public function addFeed(FreshRSS_Feed $feed): void {
-		if ($this->feeds === null) {
-			$this->feeds = [];
-		}
-		$feed->_category($this);
-		if ($feed->id() === 0) {
-			// Feeds created on a dry run do not have an ID
-			$this->feeds[] = $feed;
-		} else {
-			$this->feeds[$feed->id()] = $feed;
-		}
-		$this->sortFeeds();
+		$feeds = array_values($this->feeds ?? []);
+		$feeds[] = $feed;
+		$this->_feeds($feeds);
 	}
 
 	/**

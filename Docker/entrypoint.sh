@@ -73,6 +73,13 @@ fi
 
 php -f ./cli/prepare.php >/dev/null
 
+# Seed only a new deployment; preserve both installed and operator-provided settings.
+reader_data_path="$(php -r 'require "constants.php"; echo DATA_PATH;')"
+if [ ! -f "$reader_data_path/config.php" ] && [ ! -f "$reader_data_path/config.custom.php" ] &&
+	[ -f /etc/freshrss/config.custom.php ]; then
+	cp /etc/freshrss/config.custom.php "$reader_data_path/config.custom.php"
+fi
+
 if [ -n "$FRESHRSS_INSTALL" ]; then
 	# shellcheck disable=SC2046
 	php -f ./cli/do-install.php -- \

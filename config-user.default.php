@@ -4,6 +4,8 @@
 # `./data/config-user.custom.php` file instead, containing the keys you want to
 # override.
 return array (
+	// Preferences for the independent reader frontend.
+	'reader_preferences' => [],
 	'enabled' => true,
 	'is_admin' => false,
 	'language' => 'en',

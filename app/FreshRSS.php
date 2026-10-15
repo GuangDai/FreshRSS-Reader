@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+use FreshRSS\Services\Reader\ApiResponse;
+use FreshRSS\Utils\Http\SettingsEmbedPolicy;
+
 class FreshRSS extends Minz_FrontController {
 	/**
 	 * Initialize the different FreshRSS / Minz components.
@@ -62,6 +65,8 @@ class FreshRSS extends Minz_FrontController {
 			Minz_ExtensionManager::enableByList($ext_list, 'user');
 		}
 
+		Minz_Url::setControllerUrlTransformer(SettingsEmbedPolicy::amendUrl(...));
+
 		if (FreshRSS_Context::systemConf()->force_email_validation && !FreshRSS_Auth::hasAccess('admin')) {
 			self::checkEmailValidated();
 		}
@@ -74,6 +79,9 @@ class FreshRSS extends Minz_FrontController {
 		if (Minz_Request::isPost()) {
 			if (!FreshRSS_Context::hasSystemConf() || !FreshRSS_Auth::isCsrfOk()) {
 				// Token-based protection against CSRF attacks
+				if (Minz_Request::controllerName() === 'reader') {
+					ApiResponse::respond(['error' => FreshRSS_Auth::hasAccess() ? 'csrf_invalid' : 'authentication_required'], 403);
+				}
 				self::initI18n();
 				Minz_Error::error(403, ['error' => [_t('feedback.access.denied'), ' [CSRF]']]);
 			}

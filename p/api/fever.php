@@ -1,5 +1,8 @@
 <?php
 declare(strict_types=1);
+
+use FreshRSS\Utils\Http\ApiInput;
+
 header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox");
 header('X-Content-Type-Options: nosniff');
 
@@ -33,7 +36,29 @@ Minz_Session::init('FreshRSS', true);
 // ================================================================================================
 
 // <Debug>
-$ORIGINAL_INPUT = file_get_contents('php://input', false, null, 0, 1_048_576) ?: '';
+$input = fopen('php://input', 'rb');
+$ORIGINAL_INPUT = '';
+try {
+	$apiLimits = ApiInput::limits();
+	ApiInput::checkRequestHeaders($_SERVER, $apiLimits['maxRequestBytes']);
+	if ($input !== false) {
+		$ORIGINAL_INPUT = ApiInput::readBody($input, $apiLimits['maxRequestBytes']);
+	}
+	// Validate every batch before dispatch: requests can combine reads and mutations.
+	foreach (['with_ids', 'feed_ids', 'group_ids'] as $field) {
+		if (is_string($_REQUEST[$field] ?? null)) {
+			ApiInput::commaIds($_REQUEST[$field], $apiLimits['maxBatchItems'], $apiLimits['maxRequestBytes']);
+		}
+	}
+} catch (LengthException | UnexpectedValueException $exception) {
+	http_response_code($exception instanceof LengthException ? 413 : 415);
+	header('Content-Type: application/json; charset=UTF-8');
+	exit(json_encode(['api_version' => FeverAPI::API_LEVEL, 'auth' => 0, 'error' => $exception->getMessage()], JSON_THROW_ON_ERROR));
+} finally {
+	if (is_resource($input)) {
+		fclose($input);
+	}
+}
 
 function debugInfo(): string {
 	if (function_exists('getallheaders')) {
@@ -66,19 +91,6 @@ function debugInfo(): string {
 final class FeverDAO extends Minz_ModelPdo
 {
 	/**
-	 * @param array<string|int> $values
-	 * @param array<string,string|int> $bindArray
-	 */
-	private function bindParamArray(string $prefix, array $values, array &$bindArray): string {
-		$str = '';
-		foreach ($values as $i => $iValue) {
-			$str .= ':' . $prefix . $i . ',';
-			$bindArray[$prefix . $i] = $iValue;
-		}
-		return rtrim($str, ',');
-	}
-
-	/**
 	 * @param array<numeric-string|int> $feed_ids
 	 * @param array<numeric-string> $entry_ids
 	 * @param numeric-string|'' $max_id
@@ -96,7 +108,7 @@ final class FeverDAO extends Minz_ModelPdo
 			SQL;
 
 		if (!empty($entry_ids)) {
-			$bindEntryIds = $this->bindParamArray('id', $entry_ids, $values);
+			$bindEntryIds = ApiInput::sqlIdList($entry_ids);
 			$sql .= "\n" . <<<SQL
 				id IN($bindEntryIds)
 				SQL;
@@ -119,7 +131,7 @@ final class FeverDAO extends Minz_ModelPdo
 		}
 
 		if (!empty($feed_ids)) {
-			$bindFeedIds = $this->bindParamArray('feed', $feed_ids, $values);
+			$bindFeedIds = ApiInput::sqlIdList($feed_ids);
 			$sql .= "\n" . <<<SQL
 				AND id_feed IN($bindFeedIds)
 				SQL;
@@ -188,15 +200,14 @@ final class FeverAPI
 				Minz_Log::error('Fever API: Please reset your API password!');
 				Minz_User::change();
 			}
-			Minz_Log::warning('Fever API: wrong credentials! ' . $feverKey .
+			Minz_Log::warning('Fever API: wrong credentials!' .
 				' ; Remote IP address=' . Minz_Request::connectionRemoteAddress(), API_LOG);
 		}
 		return false;
 	}
 
 	public function isAuthenticatedApiUser(): bool {
-		$this->authenticate();
-		return FreshRSS_Context::hasUserConf();
+		return $this->authenticate();
 	}
 
 	/**
@@ -242,17 +253,19 @@ final class FeverAPI
 			$response_arr['saved_item_ids'] = $this->getSavedItemIds();
 		}
 
-		if (is_string($_REQUEST['mark'] ?? null) && is_string($_REQUEST['as'] ?? null)) {
+		$mark = $_REQUEST['mark'] ?? null;
+		if (is_string($mark) && is_string($_REQUEST['as'] ?? null)) {
 			if (is_string($_REQUEST['id'] ?? null) && ctype_digit($_REQUEST['id'])) {
 				$id = $_REQUEST['id'];
 			} elseif (is_string($_REQUEST['with_ids'] ?? null)) {
-				$id = array_values(array_filter(explode(',', $_REQUEST['with_ids']), 'ctype_digit'));
+				$id = ApiInput::commaIds($_REQUEST['with_ids'], ApiInput::limits()['maxBatchItems'],
+				ApiInput::limits()['maxRequestBytes']);
 				// N.B.: Not supported by 'feed' and 'group' functions
 			} else {
 				$id = '0';
 			}
 			$before = is_numeric($_REQUEST['before'] ?? null) ? (int)$_REQUEST['before'] : 0;
-			switch (strtolower($_REQUEST['mark'])) {
+			switch (strtolower($mark)) {
 				case 'item':
 					switch ($_REQUEST['as']) {
 						case 'read':
@@ -495,9 +508,11 @@ final class FeverAPI
 		$since_id = '';
 
 		if (is_string($_REQUEST['feed_ids'] ?? null)) {
-			$feed_ids = array_filter(explode(',', $_REQUEST['feed_ids']), 'ctype_digit');
+			$feed_ids = ApiInput::commaIds($_REQUEST['feed_ids'], ApiInput::limits()['maxBatchItems'],
+				ApiInput::limits()['maxRequestBytes']);
 		} elseif (is_string($_REQUEST['group_ids'] ?? null)) {
-			$group_ids = explode(',', $_REQUEST['group_ids']);
+			$group_ids = ApiInput::commaIds($_REQUEST['group_ids'], ApiInput::limits()['maxBatchItems'],
+				ApiInput::limits()['maxRequestBytes']);
 			$categoryDAO = FreshRSS_Factory::createCategoryDao();
 			$feeds = [];
 			foreach ($group_ids as $id) {
@@ -525,7 +540,8 @@ final class FeverAPI
 				$max_id = '';
 			}
 		} elseif (is_string($_REQUEST['with_ids'] ?? null)) {
-			$entry_ids = array_filter(explode(',', $_REQUEST['with_ids']), 'ctype_digit');
+			$entry_ids = ApiInput::commaIds($_REQUEST['with_ids'], ApiInput::limits()['maxBatchItems'],
+				ApiInput::limits()['maxRequestBytes']);
 		} elseif (is_string($_REQUEST['since_id'] ?? null)) {
 			// use the since_id argument to request the next $item_limit items
 			$since_id = $_REQUEST['since_id'];

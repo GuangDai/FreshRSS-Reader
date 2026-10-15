@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Установлено',
 		'name' => 'Название',
 		'no_configure_view' => 'Это расширение не требует настройки.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Системные расширения',
 			'no_rights' => 'Системное расширение (у вас нет необходимых разрешений)',

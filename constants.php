@@ -10,6 +10,8 @@ const FRESHRSS_VERSION = '1.30.1';
 /** @var string */
 const FRESHRSS_WEBSITE = 'https://freshrss.org';
 /** @var string */
+const FRESHRSS_SOURCE = 'https://github.com/GuangDai/FreshRSS-Reader';
+/** @var string */
 const FRESHRSS_WIKI = 'https://freshrss.github.io/FreshRSS/';
 /** @var string */
 const APP_NAME = 'FreshRSS';

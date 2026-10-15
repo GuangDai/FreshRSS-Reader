@@ -1,0 +1,14 @@
+{
+	"name": "MetaCubeXD · Luxury",
+	"author": "FreshRSS contributors / daisyUI",
+	"description": "Luxury palette from MetaCubeXD (daisyUI 5.7.17), with a fixed dark appearance and a responsive FreshRSS layout.",
+	"version": "1.0.0",
+	"files": [
+		"_frss.css",
+		"../Origine/origine.css",
+		"../Calm/calm.css",
+		"../MetaCubeXD/common.css",
+		"theme.css"
+	],
+	"theme-color": "oklch(20.219% 0.004 308.229)"
+}

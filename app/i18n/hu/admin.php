@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Telepítve',
 		'name' => 'Név',
 		'no_configure_view' => 'Ezt a kiegészítőt nem lehet konfigurálni.',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Rendszer kiegészítők',
 			'no_rights' => 'Rendszer kiegészítők (felhasználó nem jogosult a módosításhoz)',

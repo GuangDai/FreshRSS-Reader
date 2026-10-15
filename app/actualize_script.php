@@ -1,7 +1,21 @@
 #!/usr/bin/env php
 <?php
 declare(strict_types=1);
+
+use FreshRSS\Services\Refresh\Scheduler;
+
 require dirname(__DIR__) . '/cli/_cli.php';
+
+if (FreshRSS_Context::systemConf()->scheduler['enabled'] ?? false) {
+	try {
+		$scheduler = new Scheduler();
+		$scheduler->plan();
+		echo 'Completed refresh jobs: ', $scheduler->run(), "\n";
+		exit(0);
+	} catch (Throwable $e) {
+		fail('Scheduler: ' . $e->getMessage());
+	}
+}
 
 session_cache_limiter('');
 ob_implicit_flush(false);
@@ -39,19 +53,19 @@ function notice(string $message): void {
 // <Mutex>
 // Avoid having multiple actualization processes at the same time
 $mutexFile = actualize_mutex_file(TMP_PATH, DATA_PATH);
-$mutexTtl = 900; // seconds (refreshed before each new feed)
-if (file_exists($mutexFile) && ((time() - (@filemtime($mutexFile) ?: 0)) > $mutexTtl)) {
-	unlink($mutexFile);
+try {
+	$mutexHandle = actualize_acquire_lock($mutexFile);
+} catch (RuntimeException $e) {
+	fwrite(STDERR, $e->getMessage() . "\n");
+	exit(1);
 }
-
-if (($handle = @fopen($mutexFile, 'x')) === false) {
+if ($mutexHandle === false) {
 	notice('FreshRSS feeds actualization was already running, so aborting new run at ' . $begin_date->format('c'));
-	die();
+	exit(0);
 }
-fclose($handle);
-
-register_shutdown_function(static function () use ($mutexFile) {
-	unlink($mutexFile);
+register_shutdown_function(static function () use ($mutexHandle) {
+	flock($mutexHandle, LOCK_UN);
+	fclose($mutexHandle);
 });
 // </Mutex>
 

@@ -137,6 +137,9 @@ class FreshRSS_View extends Minz_View {
 	public string $htmlContent;
 	public bool $selectorSuccess;
 
+	/** @var array<string,mixed> */
+	public array $readerBootstrap = [];
+
 	// Extensions
 	/** @var list<ExtensionFullMetadata> */
 	public array $available_extensions;
@@ -144,6 +147,10 @@ class FreshRSS_View extends Minz_View {
 	/** @var array{system:array<Minz_Extension>,user:array<Minz_Extension>} */
 	public array $extension_list;
 	public ?Minz_Extension $extension = null;
+	/** @var array<string,string> */
+	public array $extensionSettingsErrors = [];
+	/** @var array<string,mixed> */
+	public array $extensionSettingsSubmitted = [];
 	/** @var array<string,string> */
 	public array $extensions_installed;
 

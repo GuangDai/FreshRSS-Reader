@@ -35,6 +35,11 @@ return array(
 		'latest' => 'Installée',
 		'name' => 'Nom',
 		'no_configure_view' => 'Cette extension n’a pas à être configurée',
+		'settings' => array(
+			'conflict' => 'These settings changed after the form was opened. Review the current values before saving again.',	// TODO
+			'import_json' => 'Paste an exported settings document. Secret values omitted from the export are preserved.',	// TODO
+			'secret_keep' => 'Leave blank to keep the saved value.',	// TODO
+		),
 		'system' => array(
 			'_' => 'Extensions système',
 			'no_rights' => 'Extensions système (contrôlées par l’administrateur)',

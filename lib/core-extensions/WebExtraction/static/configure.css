@@ -1,0 +1,215 @@
+.extraction-workbench {
+	--extraction-line: color-mix(in srgb, currentcolor 20%, transparent);
+	--extraction-soft: color-mix(in srgb, currentcolor 4%, transparent);
+	max-width: 68rem;
+	min-width: 0;
+}
+
+.extraction-workbench [hidden] {
+	display: none !important;
+}
+
+.extraction-workbench .extraction-heading,
+.extraction-workbench .extraction-toolbar,
+.extraction-workbench .extraction-recipe-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.extraction-workbench .extraction-heading,
+.extraction-workbench .extraction-recipe-row {
+	justify-content: space-between;
+}
+
+.extraction-workbench .extraction-heading {
+	margin-bottom: 1rem;
+	gap: 1rem;
+}
+
+.extraction-workbench h3,
+.extraction-workbench h4,
+.extraction-workbench .extraction-heading p {
+	margin: 0 0 0.4rem;
+}
+
+.extraction-workbench .extraction-card {
+	margin: 1rem 0;
+	padding: 1rem;
+	border: 1px solid var(--extraction-line);
+	border-radius: 0.6rem;
+	min-width: 0;
+}
+
+.extraction-workbench summary {
+	padding: 0.3rem 0;
+	font-weight: 600;
+	cursor: pointer;
+	min-height: 1.75rem;
+}
+
+.extraction-workbench details[open] > summary {
+	margin-bottom: 0.75rem;
+}
+
+.extraction-workbench .extraction-help,
+.extraction-workbench .extraction-badge {
+	font-size: 0.875rem;
+	opacity: 0.75;
+	line-height: 1.5;
+}
+
+.extraction-workbench [data-dirty="true"] {
+	font-weight: 600;
+	opacity: 1;
+}
+
+.extraction-workbench .extraction-label {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.extraction-workbench .extraction-grid {
+	display: grid;
+	min-width: 0;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.extraction-workbench .extraction-wide {
+	grid-column: 1 / -1;
+}
+
+.extraction-workbench .extraction-field {
+	margin: 0;
+	padding: 0.8rem;
+	border: 1px solid var(--extraction-line);
+	border-radius: 0.4rem;
+	min-width: 0;
+}
+
+.extraction-workbench .extraction-field legend {
+	padding: 0 0.4rem;
+	font-weight: 600;
+}
+
+.extraction-workbench input:not([type="checkbox"]):not([type="hidden"]),
+.extraction-workbench select,
+.extraction-workbench textarea {
+	margin: 0;
+	max-width: 100%;
+	width: 100%;
+	box-sizing: border-box;
+	min-height: 2.75rem;
+	min-width: 0;
+}
+
+.extraction-workbench textarea {
+	resize: vertical;
+}
+
+.extraction-workbench .extraction-toolbar,
+.extraction-workbench [data-recipe-editor] > .extraction-grid {
+	margin-block: 0.75rem;
+}
+
+.extraction-workbench .btn {
+	max-width: 100%;
+	min-height: 2.75rem;
+	white-space: normal;
+}
+
+.extraction-workbench .extraction-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 2.75rem;
+}
+
+.extraction-workbench .extraction-check input {
+	margin: 0;
+	width: auto;
+	flex-shrink: 0;
+}
+
+.extraction-workbench .extraction-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.extraction-workbench .extraction-recipe-row {
+	padding-block: 0.65rem;
+	border-bottom: 1px solid var(--extraction-line);
+}
+
+.extraction-workbench .extraction-recipe-row:last-child {
+	border-bottom: 0;
+}
+
+.extraction-workbench .extraction-recipe-info {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	overflow-wrap: anywhere;
+}
+
+.extraction-workbench .extraction-notice,
+.extraction-workbench .extraction-error {
+	margin: 0.75rem 0;
+	padding: 0.75rem;
+	border: 1px solid var(--extraction-line);
+	border-radius: 0.4rem;
+	background-color: var(--extraction-soft);
+	overflow-wrap: anywhere;
+}
+
+.extraction-workbench .extraction-error {
+	border-inline-start: 0.25rem solid var(--alert-error-border-color, currentcolor);
+}
+
+.extraction-workbench .extraction-result-field {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--extraction-line);
+}
+
+.extraction-workbench pre {
+	margin-block: 0.5rem;
+	max-width: 100%;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.extraction-workbench .extraction-code {
+	font-family: monospace;
+}
+
+.extraction-workbench :focus-visible {
+	outline: 2px solid Highlight;
+	outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+	.extraction-workbench > [data-recipe-editor] > .extraction-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 420px) {
+	.extraction-workbench .extraction-card {
+		padding: 0.75rem;
+	}
+
+	.extraction-workbench .extraction-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.extraction-workbench .extraction-toolbar > .btn,
+	.extraction-workbench .extraction-heading > .btn {
+		flex: 1 1 auto;
+	}
+}

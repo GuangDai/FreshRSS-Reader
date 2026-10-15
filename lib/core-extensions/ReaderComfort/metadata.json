@@ -1,0 +1,11 @@
+{
+	"name": "Reader Comfort",
+	"author": "FreshRSS contributors",
+	"description": "Adjust reading width, text size, line spacing and list density without writing CSS.",
+	"version": "1.0.0",
+	"entrypoint": "ReaderComfort",
+	"type": "user",
+	"configure_assets": true,
+	"min_php": "8.1",
+	"min_freshrss": "1.30.1"
+}

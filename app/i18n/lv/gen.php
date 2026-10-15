@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Paaugstināt amatu',
 		'purge' => 'Iztīrīt',
 		'refresh_opml' => 'Pārlādēt OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Noņemt',
 		'rename' => 'Pārdēvēt',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Skatīt mājaslapu',
 		'submit' => 'Iesniegt',
 		'truncate' => 'Izdzēst visus rakstus',
@@ -193,6 +195,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: jauni raksti!',
 		),
 		'labels_empty' => 'Bez birku',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Ir pieejami jauni raksti, noklikšķiniet, lai atsvaidzinātu lapu..',
 		'should_be_activated' => 'JavaScript jābūt ieslēgtam',
 		'unsafe_csp_header' => 'The CSP header in use is unsafe and FreshRSS may be vulnerable to XSS attacks. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">See documentation</a>',	// TODO

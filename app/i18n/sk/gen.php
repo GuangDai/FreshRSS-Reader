@@ -44,8 +44,10 @@ return array(
 		'promote' => 'Podporiť',
 		'purge' => 'Vymazať',
 		'refresh_opml' => 'Obnoviť OPML',
+		'reload' => 'Reload',	// TODO
 		'remove' => 'Odstrániť',
 		'rename' => 'Premenovať',
+		'retry' => 'Retry',	// TODO
 		'see_website' => 'Zobraziť webovú stránku',
 		'submit' => 'Poslať',
 		'truncate' => 'Vymazať všetky články',
@@ -193,6 +195,7 @@ return array(
 			'title_new_articles' => 'FreshRSS: nové články!',
 		),
 		'labels_empty' => 'Žiadne štítky',
+		'loading' => 'Loading…',	// TODO
 		'new_article' => 'Našli sa nové články. Kliknite na obnovenie stránky.',
 		'should_be_activated' => 'Musíte povoliť JavaScript',
 		'unsafe_csp_header' => 'The CSP header in use is unsafe and FreshRSS may be vulnerable to XSS attacks. <a target="_blank" href="https://freshrss.github.io/FreshRSS/en/admins/10_ServerConfig.html#security">See documentation</a>',	// TODO

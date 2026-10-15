@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use FreshRSS\Utils\Http\SettingsEmbedPolicy;
+
 /**
  * Controller to handle user actions.
  */
@@ -611,7 +613,7 @@ class FreshRSS_user_Controller extends FreshRSS_ActionController {
 		if ($user_config->email_validation_token === '') {
 			Minz_Request::good(
 				_t('user.email.validation.feedback.unnecessary'),
-				['c' => 'index', 'a' => 'index'],
+				SettingsEmbedPolicy::active() ? ['c' => 'user', 'a' => 'profile'] : ['c' => 'index', 'a' => 'index'],
 				showNotification: FreshRSS_Context::userConf()->good_notification_timeout > 0
 			);
 		}
@@ -628,7 +630,7 @@ class FreshRSS_user_Controller extends FreshRSS_ActionController {
 			if ($user_config->save()) {
 				Minz_Request::good(
 					_t('user.email.validation.feedback.ok'),
-					['c' => 'index', 'a' => 'index'],
+					SettingsEmbedPolicy::active() ? ['c' => 'user', 'a' => 'profile'] : ['c' => 'index', 'a' => 'index'],
 					showNotification: FreshRSS_Context::userConf()->good_notification_timeout > 0
 				);
 			} else {
@@ -663,8 +665,8 @@ class FreshRSS_user_Controller extends FreshRSS_ActionController {
 
 		if (FreshRSS_Context::userConf()->email_validation_token === '') {
 			Minz_Request::forward([
-				'c' => 'index',
-				'a' => 'index',
+				'c' => SettingsEmbedPolicy::active() ? 'user' : 'index',
+				'a' => SettingsEmbedPolicy::active() ? 'profile' : 'index',
 			], true);
 		}
 

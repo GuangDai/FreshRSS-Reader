@@ -1,8 +1,15 @@
 <?php
 	declare(strict_types=1);
+
+	use FreshRSS\Utils\Http\SettingsEmbedPolicy;
+
 	/** @var FreshRSS_View $this */
 	FreshRSS::preLayout();
+	$readerSettingsEmbed = SettingsEmbedPolicy::active();
 	$class = [];
+	if ($readerSettingsEmbed) {
+		$class[] = 'reader-settings-embedded';
+	}
 	if (Minz_Request::controllerName() !== '') {
 		$class[] = 'controller_' . Minz_Request::controllerName();
 	} else {
@@ -35,6 +42,17 @@
 <?php $this->renderHelper('javascript_vars'); ?>
 		</script>
 		<?= FreshRSS_View::headScript() ?>
+<?php if ($readerSettingsEmbed) { ?>
+		<link rel="stylesheet" href="<?= Minz_Url::display('/styles/reader/settings-embed.css?' . @filemtime(PUBLIC_PATH . '/styles/reader/settings-embed.css')) ?>" />
+		<script id="reader-settings-embed-config" type="application/json"><?= json_encode([
+			'pages' => SettingsEmbedPolicy::pageRoutes(),
+			'submits' => SettingsEmbedPolicy::submitRoutes(),
+			'defaultController' => Minz_Request::defaultControllerName(),
+			'defaultAction' => Minz_Request::defaultActionName(),
+			'confirmExit' => _t('gen.js.confirm_exit_slider'),
+		], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+		<script defer="defer" src="<?= Minz_Url::display('/scripts/reader/embed/settings-embed.js?' . @filemtime(PUBLIC_PATH . '/scripts/reader/embed/settings-embed.js')) ?>"></script>
+<?php } ?>
 		<link rel="manifest" href="<?= Minz_Url::display('/themes/manifest.json') ?>" />
 		<link rel="icon" id="favicon" type="image/svg+xml" href="<?= Minz_Url::display('/themes/icons/favicon.svg') ?>" />
 		<link rel="icon msapplication-TileImage apple-touch-icon" type="image/png" sizes="256x256" href="<?= Minz_Url::display('/themes/icons/favicon-256.png') ?>" />
@@ -81,7 +99,7 @@
 	</head>
 	<body class="<?= Minz_Request::actionName() ?>">
 <?php
-	if (!Minz_Request::paramBoolean('ajax')) {
+	if (!$readerSettingsEmbed && !Minz_Request::paramBoolean('ajax')) {
 		flush();
 		$this->partial('header');
 	}

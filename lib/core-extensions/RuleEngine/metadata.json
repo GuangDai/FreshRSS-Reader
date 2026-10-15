@@ -1,0 +1,10 @@
+{
+	"name": "Rule Engine",
+	"author": "FreshRSS contributors",
+	"description": "Compose article filters with typed JSON conditions, presets and a preview before saving.",
+	"version": "1.0.0",
+	"entrypoint": "RuleEngine",
+	"type": "user",
+	"configure_assets": true,
+	"min_php": "8.1"
+}

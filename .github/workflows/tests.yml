@@ -1,133 +1,238 @@
-name: Automated tests
+name: CI
 
 on:
   push:
-    branches: [ edge ]
+    branches: [main]
   pull_request:
-    branches: [ edge ]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-
-  tests:
-    name: tests
-    # https://github.com/actions/virtual-environments
-    runs-on: ubuntu-26.04
-
+  php:
+    name: PHP and refresh workers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-    - name: Git checkout source code
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
-    # Composer tests
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: ctype, curl, dom, fileinfo, gmp, intl, mbstring, opcache, pcntl, pdo_mysql, pdo_pgsql, pdo_sqlite, simplexml, xmlreader, xmlwriter, zip
+          coverage: none
+          tools: composer:v2
 
-    - name: Check PHP syntax
-      run: composer run-script php-lint
+      - name: Install locked PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
 
-    - name: Check PHTML syntax
-      run: composer run-script phtml-lint
+      - name: Check PHP and template syntax
+        run: |
+          composer run-script php-lint
+          composer run-script phtml-lint
 
-    - name: Check translations syntax
-      run: composer run-script translations && git diff --exit-code
+      - name: Check translations
+        run: composer run-script translations && git diff --exit-code
 
-    - name: Use Composer cache
-      id: composer-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: vendor
-        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-
+      - name: Run PHP unit tests
+        run: composer run-script phpunit -- --no-progress
 
-    - name: Run Composer install
-      run: composer install --prefer-dist --no-progress
-      if: steps.composer-cache.outputs.cache-hit != 'true'
+      - name: Check PHP coding standards and types
+        run: |
+          composer run-script phpcs
+          composer run-script phpstan -- --no-progress
 
-    - name: Run PHP unit tests
-      run: composer run-script phpunit -- --no-progress
+      - name: Test real refresh workers and scheduler recovery
+        run: |
+          python3 tests/integration/refresh/scheduler_test.py --php php
+          python3 tests/integration/refresh/concurrency_test.py --php php
+          python3 tests/integration/refresh/control_test.py --php php
+          python3 tests/integration/refresh/legacy_test.py --php php
 
-    - name: PHP_CodeSniffer
-      run: composer run-script phpcs
+  frontend:
+    name: Frontend and assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
-    - name: PHPStan
-      run: composer run-script phpstan -- --no-progress
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+          cache: npm
 
-    # - name: PHPStan Next
-    #   run: composer run-script phpstan-next -- --no-progress
+      - name: Install locked frontend dependencies
+        run: npm ci
 
-    # NPM tests
+      - name: Run frontend unit tests
+        run: npm run --silent test:frontend
 
-    - name: Uses Node.js
-      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-      with:
-        # https://nodejs.org/en/about/previous-releases
-        node-version: lts/*
-        cache: npm
+      - name: Check JavaScript, CSS and Markdown
+        run: |
+          npm run --silent eslint
+          npm run --silent stylelint
+          npm run --silent markdownlint
 
-    - run: npm ci
+      - name: Check generated assets
+        run: |
+          npm run --silent rtlcss
+          npm run --silent svgo
+          git diff --exit-code
 
-    - name: Check JavaScript syntax
-      run: npm run --silent eslint
+  browser:
+    name: Reader browser regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
-    - name: Check Markdown syntax
-      run: npm run --silent markdownlint
+      - name: Set up PHP for rendered browser fixtures
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: curl, dom, gmp, intl, mbstring, pdo_sqlite, simplexml, xmlreader, zip
+          coverage: none
+          tools: none
 
-    - name: Check CSS syntax
-      run: npm run --silent stylelint
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+          cache: npm
 
-    - name: Check Right-to-left CSS
-      run: npm run --silent rtlcss && git diff --exit-code
+      - name: Install locked dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
 
-    - name: Optimize SVG image files
-      run: npm run --silent svgo && git diff --exit-code
+      - name: Test appearance, reading and account settings
+        run: |
+          npm run test:browser:appearance -- --project=desktop
+          npm run test:browser:reading -- --project=desktop
+          npm run test:browser:account -- --project=desktop
 
-    # Shell tests
+  database:
+    name: SQLite and PostgreSQL contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
-    - name: Use shell cache
-      id: shell-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: bin
-        key: ${{ runner.os }}-bin-shfmt@v3.8.0-hadolint@v2.15.1-typos@v1.49.0
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: ctype, curl, dom, fileinfo, gmp, intl, mbstring, opcache, pcntl, pdo_pgsql, pdo_sqlite, simplexml, xmlreader, xmlwriter, zip
+          coverage: none
+          tools: composer:v2
 
-    - name: Add ./bin/ to $PATH
-      run: mkdir -p bin/ && echo "${PWD}/bin" >> $GITHUB_PATH
+      - name: Install locked PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
 
-    - name: Install shfmt
-      if: steps.shell-cache.outputs.cache-hit != 'true'
-      run: GOBIN=${PWD}/bin/ go install mvdan.cc/sh/v3/cmd/shfmt@v3.8.0
+      - name: Install PostgreSQL server binaries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y postgresql
 
-    - name: Check shell script syntax
-      # shellcheck is pre-installed https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2204-Readme.md
-      run: ./tests/shellchecks.sh
+      - name: Test real schemas, contracts and concurrent writes
+        run: |
+          postgres_bin=$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -type f -name initdb -printf '%h\n' | sort -V | tail -n1)
+          python3 tests/integration/database/matrix.py --php php --postgres-bin "$postgres_bin"
 
-    - name: Install hadolint
-      if: steps.shell-cache.outputs.cache-hit != 'true'
-      run: |
-        curl -sL -o ./bin/hadolint "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64" &&
-        echo 'c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507  ./bin/hadolint' | sha256sum -c - &&
-        chmod 700 ./bin/hadolint
+  scripts:
+    name: Shell, Dockerfile and spelling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
-    - name: Check Dockerfile syntax
-      run: find . -name 'Dockerfile*' -print0 | xargs -0 -n1 ./bin/hadolint --failure-threshold warning
+      - name: Install shell and spelling tools
+        run: |
+          mkdir -p bin
+          echo "${PWD}/bin" >> "$GITHUB_PATH"
+          GOBIN="${PWD}/bin" go install mvdan.cc/sh/v3/cmd/shfmt@v3.8.0
+          curl --fail --location --retry 3 --output bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.14.0/hadolint-linux-x86_64
+          echo '6bf226944684f56c84dd014e8b979d27425c0148f61b3bd99bcc6f39e9dc5a47  bin/hadolint' | sha256sum --check
+          chmod +x bin/hadolint
+          curl --fail --location --retry 3 --output bin/typos.tar.gz https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-unknown-linux-musl.tar.gz
+          echo '48bd2d58e02ce713b8c0f1aa239e68ee4f7d8c551013135806e6aed3938d9e10  bin/typos.tar.gz' | sha256sum --check
+          tar -xzf bin/typos.tar.gz -C bin ./typos
 
-    - name: Install typos
-      if: steps.shell-cache.outputs.cache-hit != 'true'
-      run: |
-        cd bin ;
-        wget -q 'https://github.com/crate-ci/typos/releases/download/v1.49.0/typos-v1.49.0-x86_64-unknown-linux-musl.tar.gz' &&
-        echo '48bd2d58e02ce713b8c0f1aa239e68ee4f7d8c551013135806e6aed3938d9e10  typos-v1.49.0-x86_64-unknown-linux-musl.tar.gz' | sha256sum -c - &&
-        tar -xvf *.tar.gz './typos' &&
-        chmod +x typos &&
-        rm *.tar.gz ;
-        cd ..
+      - name: Check shell scripts
+        run: ./tests/shellchecks.sh
 
-    - name: Check spelling
-      run: bin/typos
+      - name: Check Dockerfiles
+        run: find . -name 'Dockerfile*' -not -path './node_modules/*' -print0 | xargs -0 -n1 bin/hadolint --failure-threshold warning
+
+      - name: Check spelling
+        run: bin/typos
+
+  security:
+    name: Workflow security
+    uses: ./.github/workflows/zizmor.yml
+    permissions:
+      contents: read
+
+  image:
+    name: Build and smoke-test image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build runnable image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: Docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: freshrss-reader:ci
+          build-args: SOURCE_COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=reader-amd64
+          cache-to: type=gha,mode=max,scope=reader-amd64
+
+      - name: Test installation, HTTP service and refresh queue
+        run: Docker/smoke-test.sh freshrss-reader:ci
+
+  publish:
+    name: Publish tested image
+    needs: [php, frontend, browser, database, scripts, security, image]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    uses: ./.github/workflows/docker-publish.yml
+    permissions:
+      contents: read
+      packages: write # Pass registry write permission to the image publisher.

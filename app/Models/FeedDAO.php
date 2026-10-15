@@ -359,6 +359,34 @@ class FreshRSS_FeedDAO extends Minz_ModelPdo {
 		}
 	}
 
+	/** Read bounded pages so buffered PDO drivers do not materialise every subscription at once.
+	 * @return Traversable<FreshRSS_Feed>
+	 */
+	public function iterateRefreshFeeds(int $pageSize): Traversable {
+		if ($pageSize < 1) {
+			throw new InvalidArgumentException('Refresh page size must be positive');
+		}
+		$after = 0;
+		do {
+			$statement = $this->pdo->prepare('SELECT * FROM `_feed` WHERE id>:after ORDER BY id LIMIT ' . $pageSize);
+			if ($statement === false || !$statement->execute([':after' => $after])) {
+				throw new RuntimeException('Cannot enumerate subscriptions for refresh');
+			}
+			$count = 0;
+			while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+				/** @var array{id:int,url:string,kind:int,category:int,name:string,website:string,description:string,lastUpdate:int,priority:int,
+				 * pathEntries:string,httpAuth:string,error:int,ttl:int,attributes:string,cache_nbUnreads:int,cache_nbEntries:int} $row */
+				$feeds = self::daoToFeeds([$row]);
+				$after = $row['id'];
+				$count++;
+				foreach ($feeds as $feed) {
+					yield $feed;
+				}
+			}
+			$statement->closeCursor();
+		} while ($count === $pageSize);
+	}
+
 	public function searchById(int $id): ?FreshRSS_Feed {
 		$sql = <<<'SQL'
 			SELECT * FROM `_feed` WHERE id=:id

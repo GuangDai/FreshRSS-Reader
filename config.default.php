@@ -110,7 +110,33 @@ return [
 	# Faster with higher values. Reduce for server with little memory or database issues.
 	'nb_parallel_refresh' => 10,
 
+	# Optional durable CLI scheduler. All durations are seconds, memory is MiB.
+	# Defaults: FreshRSS\Services\Refresh\SchedulerConfiguration::schema(); override here or in data/config.php.
+	# Different users can run concurrently; one worker per user protects shared staging/commit operations.
+	'scheduler' => [],
+
+	# Classic UI deadlines and polling, in seconds. Defaults: FreshRSS\Services\Network\BrowserNetworkConfiguration.
+	# This does not alter independent Reader preferences or server-side RSS polling.
+	'network' => [],
+
+	# Independent reader: administrator ceilings, exposed to the frontend through its schema.
+	# These limits do not change classic reader behaviour or article retention.
+	'reader' => [
+		'max_page_size' => 200,
+		'max_cached_articles' => 200,
+		'max_cache_mib' => 64,
+		'max_request_timeout' => 120,
+		'max_refresh_interval' => 86400,
+		'max_settings_bytes' => 16384,
+		'max_search_chars' => 1000,
+	],
+
 	'limits' => [
+		# Maximum Google Reader API page sizes. Clients continue using the returned continuation token.
+		'api_max_entries' => 1000,
+		'api_max_ids' => 10000,
+		'api_max_request_bytes' => 1048576,
+		'api_max_batch_items' => 1000,
 
 		# Duration in seconds of the login cookie.
 		'cookie_duration' => FreshRSS_Auth::DEFAULT_COOKIE_DURATION,
@@ -130,6 +156,11 @@ return [
 
 		# SimplePie HTTP request timeout in seconds.
 		'timeout' => 20,
+		# Per HTTP response body/header byte ceilings; 0 disables the corresponding ceiling.
+		'http_max_response_bytes' => 16777216,
+		'http_max_header_bytes' => 65536,
+		# Maximum Retry-After files inspected by an opportunistic cleanup; 0 disables it.
+		'retry_after_cleanup_limit' => 1000,
 
 		# If a user has not used FreshRSS for more than x seconds,
 		#	then its feeds are not refreshed anymore.
