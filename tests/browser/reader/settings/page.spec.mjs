@@ -93,12 +93,12 @@ test('settings deep link, refresh, Back and Forward preserve the current categor
 
 test('reader draft survives section changes and save stays on the settings page', async ({ page, settingsReader }) => {
 	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption('nord');
+	await page.locator('input[type=radio][name=theme][value="nord"]').check();
 	await selectSection(page, 'reading'); await page.locator('[name=fontSize]').fill('21');
 	await selectSection(page, 'subscriptions');
 	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await selectSection(page, 'appearance');
-	await expect(page.locator('[name=theme]')).toHaveValue('nord');
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('nord');
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
 	await expect(page.locator('#settings-page')).toBeVisible();
@@ -147,14 +147,14 @@ test('invalid reader draft reveals its category and failed saves preserve the dr
 });
 
 test('returning to reading and Forward retain an unsaved reader draft without applying it to reading', async ({ page, settingsReader }) => {
-	await page.locator('#open-settings').click(); await page.locator('[name=theme]').selectOption('nord');
+	await page.locator('#open-settings').click(); await page.locator('input[type=radio][name=theme][value="nord"]').check();
 	await selectSection(page, 'reading'); await page.locator('[name=fontSize]').fill('21');
 	await page.locator('#cancel-settings').click();
 	await expect(page.locator('#settings-page')).toBeHidden();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', settingsReader.preferences.theme);
 	await page.goForward(); await expect(page.locator('[data-settings-panel="reading"]')).toBeVisible();
 	await expect(page.locator('[name=fontSize]')).toHaveValue('21');
-	await expect(page.locator('[name=theme]')).toHaveValue('nord');
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('nord');
 	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', settingsReader.preferences.theme);
 	expect(settingsReader.writes).toEqual([]);
@@ -241,7 +241,7 @@ test('subscription batch editing saves only the changed field with the selected 
 });
 
 test('one save applies appearance and account changes across categories', async ({ page, settingsReader }) => {
-	await page.locator('#open-settings').click(); await page.locator('[name=theme]').selectOption('nord');
+	await page.locator('#open-settings').click(); await page.locator('input[type=radio][name=theme][value="nord"]').check();
 	await selectSection(page, 'reading');
 	await page.locator('[data-account-field="mark_when.article"] input[type=checkbox]').check();
 	await selectSection(page, 'storage');
@@ -256,7 +256,7 @@ test('one save applies appearance and account changes across categories', async 
 	await expect(page.locator('#settings-page')).toBeVisible();
 	const write = settingsReader.requests.find(request => request.body);
 	expect(write.body.values).toEqual({ 'mark_when.article': true });
-	await selectSection(page, 'appearance'); await expect(page.locator('[name=theme]')).toHaveValue('nord');
+	await selectSection(page, 'appearance'); await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('nord');
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
 });

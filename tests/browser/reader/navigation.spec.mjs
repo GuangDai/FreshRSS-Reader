@@ -322,10 +322,11 @@ test('Back restores the saved appearance and Forward restores the settings draft
 	const originalTheme = await page.locator('body').getAttribute('data-theme');
 	await page.locator('#open-settings').click();
 	await expect(page.locator('#settings-page')).toBeVisible();
-	const originalPreference = await page.locator('[name=theme]').inputValue();
+	const originalPreference = await page.locator('input[type=radio][name=theme]:checked').inputValue();
 	const draftTheme = originalTheme === 'dark' ? 'light' : 'dark';
-	await page.locator('[name=theme]').selectOption(draftTheme);
-	await expect(page.locator('body')).toHaveAttribute('data-theme', draftTheme);
+	await page.locator(`input[type=radio][name=theme][value="${draftTheme}"]`).check();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', draftTheme);
 	await page.goBack();
 	await expect(page).toHaveURL(listURL);
 	await expect(page.locator('#settings-page')).not.toBeVisible();
@@ -334,12 +335,13 @@ test('Back restores the saved appearance and Forward restores the settings draft
 	expect(listRequests).toHaveLength(requestCount);
 	await page.goForward();
 	await expect(page.locator('#settings-page')).toBeVisible();
-	await expect(page.locator('[name=theme]')).toHaveValue(draftTheme);
-	await expect(page.locator('body')).toHaveAttribute('data-theme', draftTheme);
-	await page.locator('#discard-settings').click();
-	await expect(page.locator('[name=theme]')).toHaveValue(originalPreference);
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue(draftTheme);
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
-	await expect(page.locator('#discard-settings')).toBeHidden();
+	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', draftTheme);
+	await page.locator('#discard-settings').click();
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue(originalPreference);
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+	await expect(page.locator('#discard-settings')).toBeDisabled();
 	expect(listRequests).toHaveLength(requestCount);
 });
 
@@ -347,6 +349,7 @@ for (const change of ['reopen', 'edit']) {
 	test(`a delayed settings import cannot replace a ${change === 'reopen' ? 'reopened' : 'newer'} appearance draft`, async ({ page }) => {
 		const { handlers, listRequests } = await fixture(page);
 		const requestCount = listRequests.length;
+		const originalTheme = await page.locator('body').getAttribute('data-theme');
 		const writes = [];
 		handlers.preferences = route => {
 			writes.push(route.request().postDataJSON());
@@ -377,21 +380,22 @@ for (const change of ['reopen', 'edit']) {
 			await page.locator('#open-settings').click();
 		}
 		await settingsSection(page, 'appearance');
-		await page.locator('[name=theme]').selectOption('dracula');
+		await page.locator('input[type=radio][name=theme][value="dracula"]').check();
 		await page.evaluate(async () => {
 			await globalThis.readerTestFinishImport();
 			await new Promise(resolve => globalThis.requestAnimationFrame(resolve));
 		});
 		await expect(page.locator('#settings-page')).toBeVisible();
-		await expect(page.locator('[name=theme]')).toHaveValue('dracula');
-		await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
+		await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('dracula');
+		await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+		await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', 'dracula');
 		await expect(page.locator('#settings-status')).toBeHidden();
 		expect(writes).toHaveLength(0);
 		expect(listRequests).toHaveLength(requestCount);
 	});
 }
 
-test('returning from a theme preview restores article scroll, reopening restores the draft and saving releases its retained frame', async ({ page }) => {
+test('a local theme draft preserves article scroll until saving applies the selected appearance', async ({ page }) => {
 	const { handlers, listRequests } = await fixture(page);
 	const requestCount = listRequests.length;
 	const writes = [];
@@ -411,25 +415,26 @@ test('returning from a theme preview restores article scroll, reopening restores
 	await page.locator('#article-frame').evaluate(node => { globalThis.readerTestOriginalFrame = node; });
 	const originalTheme = await page.locator('body').getAttribute('data-theme');
 	const draftTheme = originalTheme === 'dracula' ? 'nord' : 'dracula';
-	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption(draftTheme);
-	await expect(page.locator('body')).toHaveAttribute('data-theme', draftTheme);
+	// Exercise the background article state while phone reading covers the main toolbar.
+	await page.locator('#open-settings').dispatchEvent('click');
+	await page.locator(`input[type=radio][name=theme][value="${draftTheme}"]`).check();
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', draftTheme);
 	await page.locator('#cancel-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
 	await expect(page.locator('#article-pane iframe')).toHaveCount(1);
 	expect(await page.locator('#article-frame').evaluate(node => node === globalThis.readerTestOriginalFrame)).toBe(true);
 	await expect.poll(() => page.frameLocator('#article-frame').locator('html').evaluate(node => node.scrollTop)).toBe(800);
 	expect(writes).toHaveLength(0);
-	await page.locator('#open-settings').click();
-	await expect(page.locator('[name=theme]')).toHaveValue(draftTheme);
-	await expect(page.locator('body')).toHaveAttribute('data-theme', draftTheme);
-	await page.locator('#article-frame').evaluate(node => { globalThis.readerTestPreviewFrame = node; });
+	await page.locator('#open-settings').dispatchEvent('click');
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue(draftTheme);
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', draftTheme);
+	expect(await page.locator('#article-frame').evaluate(node => node === globalThis.readerTestOriginalFrame)).toBe(true);
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
 	await expect(page.locator('#article-pane iframe')).toHaveCount(1);
-	expect(await page.locator('#article-frame').evaluate(node => node === globalThis.readerTestPreviewFrame)).toBe(true);
-	expect(await page.evaluate(() => globalThis.readerTestOriginalFrame.isConnected)).toBe(false);
 	await page.locator('#cancel-settings').click();
 	await expect(page.locator('#settings-page')).toBeHidden();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', draftTheme);

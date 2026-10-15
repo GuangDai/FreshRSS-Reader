@@ -44,7 +44,7 @@ test('layout changes reuse the current list and numeric preferences persist', as
 	await expect(page.locator('body')).toHaveAttribute('data-layout', 'cards');
 	expect(listRequests).toBe(0);
 	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption('dark');
+	await page.locator('input[type=radio][name=theme][value="dark"]').check();
 	await selectSection(page, 'reading');
 	await page.locator('[name=pageSize]').fill('25');
 	await selectSection(page, 'storage');
@@ -168,7 +168,7 @@ test('export validates numeric drafts before producing a reusable settings file'
 	expect(downloads).toHaveLength(0);
 	await cache.fill('0');
 	await selectSection(page, 'appearance');
-	await page.locator('[name=theme]').selectOption('nord');
+	await page.locator('input[type=radio][name=theme][value="nord"]').check();
 	await selectSection(page, 'data');
 	const downloaded = page.waitForEvent('download');
 	await page.locator('#export-settings').click();
@@ -178,7 +178,7 @@ test('export validates numeric drafts before producing a reusable settings file'
 	await page.locator('#import-file').setInputFiles({
 		name: 'reader-settings.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(settings)),
 	});
-	await expect(page.locator('[name=theme]')).toHaveValue('nord');
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('nord');
 	await expect(cache).toHaveValue('0');
 	await page.locator('#cancel-settings').click();
 });

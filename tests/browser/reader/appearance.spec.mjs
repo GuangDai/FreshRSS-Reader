@@ -42,6 +42,17 @@ async function selectSection(page, section) {
 	await expect(page.locator(`[data-settings-panel="${section}"]`)).toBeVisible();
 }
 
+function choiceGroup(page, key) { return page.locator(`fieldset.appearance-choice-group[data-preference="${key}"]`); }
+function selectedChoice(page, key) { return choiceGroup(page, key).locator('input[type="radio"]:checked'); }
+function choiceTile(page, key, value) { return choiceGroup(page, key).locator(`label[data-choice-value="${value}"]`); }
+function previewSurface(page) { return page.locator('[data-appearance-preview] > [data-appearance-preview-surface]'); }
+
+async function choose(page, key, value) {
+	const tile = choiceTile(page, key, value);
+	await tile.click();
+	await expect(tile.locator('input[type="radio"]')).toBeChecked();
+}
+
 async function articleColours(page) {
 	return page.frameLocator('#article-frame').locator('body').evaluate(node => ({
 		surface: globalThis.getComputedStyle(node).backgroundColor,
@@ -50,7 +61,7 @@ async function articleColours(page) {
 	}));
 }
 
-test('theme selection stays a draft without changing the page or article', async ({ page, reader }) => {
+test('visual theme choices update an explained local preview while preserving the page and article', async ({ page, reader }) => {
 	const mobile = await page.locator('#toggle-sidebar').isVisible();
 	let article;
 	if (!mobile) {
@@ -61,13 +72,22 @@ test('theme selection stays a draft without changing the page or article', async
 	}
 	await openSettings(page);
 	expect(THEME_NAMES).toHaveLength(32);
-	const select = page.locator('[name=theme]');
-	expect(await select.locator('option').evaluateAll(nodes => nodes.map(node => node.value).sort())).toEqual(['auto', ...THEME_NAMES].sort());
-	await expect(select.locator('optgroup')).toHaveCount(2);
-	await expect(page.locator('[data-choose-theme], .appearance-preview, #reading-preview')).toHaveCount(0);
+	const group = choiceGroup(page, 'theme');
+	expect(await group.locator('input[type="radio"]').evaluateAll(nodes => nodes.map(node => node.value).sort())).toEqual(['auto', ...THEME_NAMES].sort());
+	await expect(page.locator('select[name="theme"], select[name="lightTheme"], select[name="darkTheme"]')).toHaveCount(0);
+	await expect(group).toHaveAccessibleName('主题配色');
+	await expect(page.locator('[data-appearance-preview]')).toBeVisible();
+	await expect(page.locator('[data-appearance-preview]')).toContainText(/预览/);
+	await expect(page.locator('[data-appearance-preview]')).toContainText(/保存/);
 	for (const name of THEME_NAMES) {
-		await select.selectOption(name);
-		await expect(select).toHaveValue(name);
+		const tile = choiceTile(page, 'theme', name);
+		await expect(tile.locator('.reader-miniature')).toHaveAttribute('data-theme', name);
+		await expect(tile.locator('.mini-sidebar, .mini-list, .mini-article')).toHaveCount(3);
+		await choose(page, 'theme', name);
+		await expect(selectedChoice(page, 'theme')).toHaveValue(name);
+		await expect(tile).toHaveAttribute('data-selected', 'true');
+		await expect(group.locator('input:checked')).toHaveCount(1);
+		await expect(previewSurface(page)).toHaveAttribute('data-theme', name);
 		await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
 	}
 	if (!mobile) {
@@ -75,15 +95,112 @@ test('theme selection stays a draft without changing the page or article', async
 		expect(await page.evaluate(() => document.getElementById('article-frame') === globalThis.originalArticleFrame)).toBe(true);
 	}
 	expect(reader.writes).toHaveLength(0);
-	await select.selectOption('nord');
+	await choose(page, 'theme', 'nord');
+	const lightPreview = await previewSurface(page).locator('.reader-miniature').evaluate(node => globalThis.getComputedStyle(node).backgroundColor);
+	await choose(page, 'theme', 'dracula');
+	const darkPreview = await previewSurface(page).locator('.reader-miniature').evaluate(node => globalThis.getComputedStyle(node).backgroundColor);
+	expect(darkPreview).not.toBe(lightPreview);
+	await choose(page, 'theme', 'nord');
+	const expand = page.locator('[data-appearance-preview] > header .appearance-preview-expand');
+	await expand.click();
+	const dialog = page.getByRole('dialog', { name: '外观预览', exact: true });
+	await expect(dialog).toBeVisible();
+	const enlarged = dialog.locator('[data-appearance-preview-surface]');
+	await expect(enlarged).toHaveAttribute('data-theme', 'nord');
+	for (const key of ['layout', 'density', 'style']) {
+		await expect(enlarged).toHaveAttribute('data-' + key, await selectedChoice(page, key).inputValue());
+	}
+	await expect(dialog.locator('.mini-article')).toContainText(/\S+/);
+	const paneControls = dialog.locator('.appearance-preview-areas');
+	const narrowPreview = page.viewportSize().width <= 720;
+	if (narrowPreview) {
+		await expect(paneControls).toBeVisible();
+		const originalChoices = await page.locator('input[type="radio"][form="appearance-form"]:checked')
+			.evaluateAll(nodes => nodes.map(node => [node.name, node.value]));
+		for (const pane of ['sidebar', 'list', 'article']) {
+			await paneControls.locator(`[data-preview-pane="${pane}"]`).click();
+			await expect(paneControls.locator('[aria-pressed="true"]')).toHaveAttribute('data-preview-pane', pane);
+			await expect(enlarged).toHaveAttribute('data-preview-pane', pane);
+			await expect(enlarged.locator('.reader-miniature')).toHaveAttribute('data-preview-pane', pane);
+			for (const region of ['sidebar', 'list', 'article']) {
+				const content = enlarged.locator('.mini-' + region);
+				if (region === pane) {
+					await expect(content).toBeVisible();
+					const bounds = await content.boundingBox();
+					expect(bounds.width).toBeGreaterThanOrEqual((await dialog.boundingBox()).width * 0.8);
+				} else await expect(content).toBeHidden();
+			}
+			await expect(enlarged).toHaveAttribute('data-theme', 'nord');
+		}
+		expect(await page.locator('input[type="radio"][form="appearance-form"]:checked')
+			.evaluateAll(nodes => nodes.map(node => [node.name, node.value]))).toEqual(originalChoices);
+		expect(reader.writes).toHaveLength(0);
+	} else {
+		await expect(paneControls).toBeHidden();
+		for (const pane of ['sidebar', 'list', 'article']) await expect(enlarged.locator('.mini-' + pane)).toBeVisible();
+	}
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+	await expect(expand).toBeFocused();
+	await expect(page.locator('#settings-page')).toBeVisible();
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
 	await page.locator('#cancel-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
 	await expect(page.locator('#settings-page')).toBeHidden();
 	await openSettings(page);
-	await expect(select).toHaveValue('nord');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'nord');
 	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
 	await page.locator('#discard-settings').click();
-	await expect(select).toHaveValue(reader.bootstrap.preferences.theme);
+	await expect(selectedChoice(page, 'theme')).toHaveValue(reader.bootstrap.preferences.theme);
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	if (narrowPreview) {
+		await expand.click();
+		await paneControls.locator('[data-preview-pane="list"]').click();
+		await expect(enlarged.locator('.mini-list')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeHidden();
+		await expect(selectedChoice(page, 'theme')).toHaveValue(reader.bootstrap.preferences.theme);
+		await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	}
+	expect(reader.writes).toHaveLength(0);
+});
+
+test('appearance choice groups support native keyboard selection and explain layout differences visually', async ({ page, reader }) => {
+	await openSettings(page);
+	for (const [key, count] of [['theme', 33], ['layout', 3], ['density', 2], ['style', 3]]) {
+		const group = choiceGroup(page, key);
+		await expect(group.locator('input[type="radio"]')).toHaveCount(count);
+		await expect(group.locator('select')).toHaveCount(0);
+		const inputs = group.locator('input[type="radio"]');
+		const values = await inputs.evaluateAll(nodes => nodes.map(node => node.value));
+		const current = await selectedChoice(page, key).inputValue();
+		const next = values[(values.indexOf(current) + 1) % values.length];
+		await selectedChoice(page, key).focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(selectedChoice(page, key)).toHaveValue(next);
+		await expect(selectedChoice(page, key)).toBeFocused();
+		await expect(group.locator('input:checked')).toHaveCount(1);
+		await page.keyboard.press('ArrowLeft');
+		await expect(selectedChoice(page, key)).toHaveValue(current);
+		await expect(selectedChoice(page, key)).toBeFocused();
+	}
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	for (const layout of ['split', 'list', 'cards']) {
+		await choose(page, 'layout', layout);
+		await expect(previewSurface(page)).toHaveAttribute('data-layout', layout);
+		await expect(choiceTile(page, 'layout', layout).locator('.reader-miniature')).toHaveAttribute('data-layout', layout);
+		await expect(page.locator('body')).toHaveAttribute('data-layout', reader.bootstrap.preferences.layout);
+	}
+	await choose(page, 'density', 'compact');
+	await expect(previewSurface(page)).toHaveAttribute('data-density', 'compact');
+	await expect(page.locator('body')).toHaveAttribute('data-density', reader.bootstrap.preferences.density);
+	await choose(page, 'style', 'paper');
+	await expect(previewSurface(page)).toHaveAttribute('data-style', 'paper');
+	await expect(page.locator('body')).toHaveAttribute('data-style', reader.bootstrap.preferences.style);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= globalThis.innerWidth)).toBe(true);
 	expect(reader.writes).toHaveLength(0);
 });
 
@@ -104,7 +221,7 @@ test('all 32 saved themes match visible article colours and preserve readable ar
 	const settingsContrast = [];
 	for (const name of THEME_NAMES) {
 		await openSettings(page);
-		await page.locator('[name=theme]').selectOption(name);
+		await choose(page, 'theme', name);
 		await page.locator('#save-reader-settings').click();
 		await expect(page.locator('#save-reader-settings')).toBeDisabled();
 		await expect(page.locator('body')).toHaveAttribute('data-theme', name);
@@ -149,25 +266,58 @@ test('all 32 saved themes match visible article colours and preserve readable ar
 test('saved system mode follows the system while unsaved theme choices stay in the form', async ({ page, reader }, testInfo) => {
 	await openSettings(page);
 	await page.emulateMedia({ colorScheme: 'light' });
-	await page.locator('[name=theme]').selectOption('auto');
-	await expect(page.locator('[name=lightTheme]')).toBeVisible();
-	await expect(page.locator('[name=darkTheme]')).toBeVisible();
-	await page.locator('[name=lightTheme]').selectOption('cyberpunk');
-	await page.locator('[name=darkTheme]').selectOption('dracula');
+	await choose(page, 'theme', 'auto');
+	await expect(choiceGroup(page, 'lightTheme')).toBeVisible();
+	await expect(choiceGroup(page, 'darkTheme')).toBeVisible();
+	const modes = page.locator('[data-appearance-preview] > .appearance-preview-modes');
+	await expect(modes).toBeVisible();
+	const day = modes.locator('[data-preview-mode="light"]');
+	const night = modes.locator('[data-preview-mode="dark"]');
+	await choose(page, 'lightTheme', 'cyberpunk');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'cyberpunk');
+	await choose(page, 'darkTheme', 'dracula');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
+	await expect(night).toHaveAttribute('aria-pressed', 'true');
+	await expect(day).toHaveAttribute('aria-pressed', 'false');
 	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await day.click();
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'cyberpunk');
+	await expect(day).toHaveAttribute('aria-pressed', 'true');
+	await page.emulateMedia({ colorScheme: 'dark' });
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'cyberpunk');
+	await night.click();
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await page.emulateMedia({ colorScheme: 'light' });
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
+	await expect(selectedChoice(page, 'lightTheme')).toHaveValue('cyberpunk');
+	await expect(selectedChoice(page, 'darkTheme')).toHaveValue('dracula');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	expect(reader.writes).toHaveLength(0);
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'cyberpunk');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
 	await page.emulateMedia({ colorScheme: 'dark' });
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
-	const theme = page.locator('[name=theme]');
-	await theme.focus(); await expect(theme).toBeFocused();
-	await theme.selectOption('nord');
-	await expect(page.locator('[name=theme]')).toHaveValue('nord');
-	await expect(page.locator('[name=lightTheme]')).not.toBeVisible();
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
+	await day.click();
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'cyberpunk');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	expect(reader.writes).toHaveLength(1);
+	await choose(page, 'theme', 'nord');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
+	await expect(choiceGroup(page, 'lightTheme')).not.toBeVisible();
+	await expect(choiceGroup(page, 'darkTheme')).not.toBeVisible();
+	await expect(modes).toBeHidden();
+	await expect(selectedChoice(page, 'lightTheme')).toHaveValue('cyberpunk');
+	await expect(selectedChoice(page, 'darkTheme')).toHaveValue('dracula');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'nord');
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
 	await page.emulateMedia({ colorScheme: 'light' });
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'cyberpunk');
-	await expect(theme).toHaveValue('nord');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'nord');
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
@@ -177,9 +327,20 @@ test('saved system mode follows the system while unsaved theme choices stay in t
 	await page.reload();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
 	await openSettings(page);
-	await expect(page.locator('[name=theme]')).toHaveValue('nord');
-	await expect(page.locator('[name=lightTheme]')).toHaveValue('cyberpunk');
-	await expect(page.locator('[name=darkTheme]')).toHaveValue('dracula');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
+	await expect(selectedChoice(page, 'lightTheme')).toHaveValue('cyberpunk');
+	await expect(selectedChoice(page, 'darkTheme')).toHaveValue('dracula');
+	await choose(page, 'theme', 'auto');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'cyberpunk');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	await page.emulateMedia({ colorScheme: 'dark' });
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	await page.locator('#discard-settings').click();
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'nord');
+	await expect(selectedChoice(page, 'lightTheme')).toHaveValue('cyberpunk');
+	await expect(selectedChoice(page, 'darkTheme')).toHaveValue('dracula');
 	await page.locator('#cancel-settings').click();
 	await page.locator('.entry-card').first().click();
 	await expect(page.locator('#article-frame')).toBeVisible();
@@ -188,23 +349,29 @@ test('saved system mode follows the system while unsaved theme choices stay in t
 
 test('failed theme saves leave the current appearance intact and keep the selected choice for retry', async ({ page, reader }) => {
 	await openSettings(page);
-	await page.locator('[name=theme]').selectOption('nord');
+	await choose(page, 'theme', 'nord');
 	const fail = route => route.fulfill({ status: 503, json: { version: 1, error: 'write_failed' } });
 	await page.route('**/i/?c=reader&a=preferences*', fail);
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#settings-status')).toBeVisible();
-	await expect(page.locator('[name=theme]')).toHaveValue('nord');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('nord');
+	await expect(choiceTile(page, 'theme', 'nord')).toHaveAttribute('data-selected', 'true');
+	await expect(choiceTile(page, 'theme', 'nord')).toHaveAttribute('data-saved', 'false');
+	await expect(choiceTile(page, 'theme', 'nord').locator('.appearance-choice-state')).toHaveText('已选择');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'nord');
 	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
 	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await page.unroute('**/i/?c=reader&a=preferences*', fail);
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+	await expect(choiceTile(page, 'theme', 'nord')).toHaveAttribute('data-saved', 'true');
+	await expect(choiceTile(page, 'theme', 'nord').locator('.appearance-choice-state')).toHaveText('已保存');
 	expect(reader.preferences.theme).toBe('nord');
 });
 
 test('a delayed save applies its saved theme without overwriting a newer unsaved choice', async ({ page, reader }) => {
 	await openSettings(page);
-	await page.locator('[name=theme]').selectOption('nord');
+	await choose(page, 'theme', 'nord');
 	let release;
 	let received;
 	const pending = new Promise(resolve => { release = resolve; });
@@ -216,10 +383,13 @@ test('a delayed save applies its saved theme without overwriting a newer unsaved
 	};
 	await page.route('**/i/?c=reader&a=preferences*', delay);
 	await page.locator('#save-reader-settings').click(); await requestReceived;
-	await page.locator('[name=theme]').selectOption('dracula');
+	await choose(page, 'theme', 'dracula');
 	release();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
-	await expect(page.locator('[name=theme]')).toHaveValue('dracula');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('dracula');
+	await expect(previewSurface(page)).toHaveAttribute('data-theme', 'dracula');
+	await expect(choiceTile(page, 'theme', 'nord')).toHaveAttribute('data-saved', 'true');
+	await expect(choiceTile(page, 'theme', 'dracula')).toHaveAttribute('data-saved', 'false');
 	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await page.unroute('**/i/?c=reader&a=preferences*', delay);
 	await page.locator('#save-reader-settings').click();
@@ -229,10 +399,10 @@ test('a delayed save applies its saved theme without overwriting a newer unsaved
 
 test('export round-trips draft values, legacy imports stay unapplied until saved, and preferences survive reload', async ({ page, reader }) => {
 	await openSettings(page);
-	await page.locator('[name=theme]').selectOption('nord');
+	await choose(page, 'theme', 'nord');
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
-	await page.locator('[name=theme]').selectOption('dracula');
+	await choose(page, 'theme', 'dracula');
 	await selectSection(page, 'reading');
 	await page.locator('[name=fontSize]').fill('22');
 	await selectSection(page, 'data');
@@ -243,14 +413,14 @@ test('export round-trips draft values, legacy imports stay unapplied until saved
 	await page.locator('#reset-settings').click();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
 	await page.locator('#import-file').setInputFiles({ name: 'reader.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
-	await expect(page.locator('[name=theme]')).toHaveValue('dracula');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('dracula');
 	await expect(page.locator('[name=fontSize]')).toHaveValue('22');
 	const legacy = { format: 'freshrss-reader', version: 1, preferences: { theme: 'dark', style: 'paper', fontSize: 20 } };
 	await page.locator('#import-file').setInputFiles({ name: 'legacy-reader.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(legacy)) });
-	await expect(page.locator('[name=theme]')).toHaveValue('dark');
+	await expect(selectedChoice(page, 'theme')).toHaveValue('dark');
 	await expect(page.locator('[name=fontSize]')).toHaveValue('20');
-	await expect(page.locator('[name=lightTheme]')).toHaveValue('nord');
-	await expect(page.locator('[name=darkTheme]')).toHaveValue('sunset');
+	await expect(selectedChoice(page, 'lightTheme')).toHaveValue('nord');
+	await expect(selectedChoice(page, 'darkTheme')).toHaveValue('sunset');
 	await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
 	await expect(page.locator('body')).toHaveAttribute('data-style', reader.bootstrap.preferences.style);
 	expect(reader.writes).toHaveLength(1);
@@ -270,11 +440,16 @@ test('appearance has labelled form controls and invalid values reveal the field 
 	await openSettings(page);
 	await expect(page.locator('[data-settings-panel=storage]')).toBeHidden();
 	await expect(page.locator('[name=cacheArticles]')).not.toBeVisible();
-	const theme = await page.locator('[name=theme]').boundingBox();
+	const first = choiceGroup(page, 'theme').locator('label').first();
+	await first.scrollIntoViewIfNeeded();
+	const theme = await first.boundingBox();
 	const settings = await page.locator('#settings-page').boundingBox();
 	expect(theme.y).toBeGreaterThanOrEqual(settings.y);
 	expect(theme.y + theme.height).toBeLessThanOrEqual(settings.y + settings.height);
-	await expect(page.locator('[name=theme]')).toHaveAccessibleName('主题配色');
+	expect(theme.width).toBeGreaterThanOrEqual(44);
+	expect(theme.height).toBeGreaterThanOrEqual(44);
+	await expect(choiceGroup(page, 'theme')).toHaveAccessibleName('主题配色');
+	await expect(choiceTile(page, 'theme', 'nord').locator('input')).toHaveAccessibleName('Nord');
 	await expect(page.locator('[name=sidebarWidth]')).not.toBeVisible();
 	await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('appearance.png') });
 	await selectSection(page, 'storage');

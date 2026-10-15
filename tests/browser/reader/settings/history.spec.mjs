@@ -53,7 +53,7 @@ fixtureTest('rapid settings saves and article opens retain the latest article th
 		for (const theme of THEME_NAMES) {
 			await page.locator('#open-settings').click();
 			await expect(page.locator('#settings-page')).toBeVisible();
-			await page.locator('[name=theme]').selectOption(theme);
+			await page.locator(`input[type=radio][name=theme][value="${theme}"]`).check();
 			await page.locator('#save-reader-settings').click();
 			await expect(page.locator('#save-reader-settings')).toBeDisabled();
 			await page.locator('#cancel-settings').click();

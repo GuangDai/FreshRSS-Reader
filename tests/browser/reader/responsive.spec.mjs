@@ -102,9 +102,8 @@ async function expectContained(locator) {
 }
 
 async function openSettings(page) {
-	if (await page.locator('#toggle-sidebar').isVisible()) await page.locator('#toggle-sidebar').click();
 	await page.locator('#open-settings').click();
-	await expect(page.locator('#appearance-dialog')).toBeVisible();
+	await expect(page.locator('#settings-page')).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -360,25 +359,31 @@ test.describe('touch reading controls and long forms', () => {
 			await page.setViewportSize(viewport);
 			await openReader(page);
 			await openSettings(page);
-			const body = page.locator('#appearance-dialog .dialog-body');
+			const body = page.locator('#settings-page .settings-content');
 			const close = page.locator('#cancel-settings');
-			const save = page.locator('#appearance-form [type=submit]');
+			const save = page.locator('#save-reader-settings');
 			await expect(close).toBeInViewport();
 			await expect(save).toBeInViewport();
 			const initialClose = await close.boundingBox();
 			const initialSave = await save.boundingBox();
-			const layout = await page.locator('[name=layout]').boundingBox();
-			const density = await page.locator('[name=density]').boundingBox();
-			if (viewport.width > 600) expect(density.x).toBeGreaterThan(layout.x + layout.width);
-			else expect(density.y).toBeGreaterThan(layout.y + layout.height);
+			for (const key of ['layout', 'density']) {
+				const group = page.locator(`fieldset[data-preference="${key}"]`);
+				const choice = group.locator('label[data-choice-value]').first();
+				await choice.scrollIntoViewIfNeeded();
+				const bounds = await choice.boundingBox();
+				expect(bounds.height).toBeGreaterThanOrEqual(44);
+				expect(bounds.width).toBeGreaterThanOrEqual(44);
+				await expectContained(group);
+			}
 			await body.evaluate(node => { node.scrollTop = node.scrollHeight; });
 			await expect(close).toBeInViewport();
 			await expect(save).toBeInViewport();
 			expect((await close.boundingBox()).y).toBeCloseTo(initialClose.y, 0);
 			expect((await save.boundingBox()).y).toBeCloseTo(initialSave.y, 0);
 			await expectContained(body);
-			await page.locator('.advanced-settings > summary').click();
-			await expect(page.locator('.advanced-settings')).toHaveJSProperty('open', true);
+			const sections = page.locator('#settings-section-select');
+			if (await sections.isVisible()) await sections.selectOption('automation');
+			else await page.locator('[data-settings-section=automation]').click();
 			const refresh = page.locator('[name=refreshInterval]');
 			await refresh.fill('');
 			await save.click();
@@ -389,7 +394,7 @@ test.describe('touch reading controls and long forms', () => {
 			expect(inputBounds.y).toBeGreaterThanOrEqual(bodyBounds.y - 1);
 			expect(inputBounds.y + inputBounds.height).toBeLessThanOrEqual(bodyBounds.y + bodyBounds.height + 1);
 			await close.click();
-			await expect(page.locator('#appearance-dialog')).not.toBeVisible();
+			await expect(page.locator('#settings-page')).not.toBeVisible();
 		});
 	}
 

@@ -426,13 +426,13 @@ test('unchanged settings need no save and reverting a draft disables saving agai
 	for (const id of ['export-settings', 'import-settings', 'reset-settings']) await expect(page.locator('#' + id)).toBeHidden();
 	const originalTheme = reader.preferences.theme;
 	const changedTheme = originalTheme === 'dark' ? 'nord' : 'dark';
-	await page.locator('[name=theme]').selectOption(changedTheme);
+	await page.locator(`input[type=radio][name=theme][value="${changedTheme}"]`).check();
 	await expect(save).toBeEnabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
-	await page.locator('[name=theme]').selectOption(originalTheme);
+	await page.locator(`input[type=radio][name=theme][value="${originalTheme}"]`).check();
 	await expect(save).toBeDisabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
-	await page.locator('[name=theme]').selectOption(changedTheme);
+	await page.locator(`input[type=radio][name=theme][value="${changedTheme}"]`).check();
 	await save.click();
 	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(save).toBeDisabled();

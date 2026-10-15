@@ -7,8 +7,9 @@ import { FeedTree } from './subscriptions/feed-tree.js';
 import { FeedSelection } from './subscriptions/batch-update.js';
 import { FeedEditor } from './subscriptions/feed-editor.js';
 import { ReaderNavigation } from './core/navigation.js';
-import { THEME_NAMES, resolveTheme, themeSpec } from './appearance/themes.js';
+import { resolveTheme } from './appearance/themes.js';
 import { appearanceColours } from './appearance/colours.js';
+import { AppearanceChoices } from './appearance/choices.js';
 import { SettingsPage } from './settings/page.js';
 import { SettingsSubscriptions } from './settings/subscriptions.js';
 
@@ -42,6 +43,7 @@ settingsPage.mount();
 const media = matchMedia('(prefers-color-scheme: dark)');
 const mobile = matchMedia('(max-width: 820px), (max-height: 500px) and (max-width: 1100px) and (any-pointer: coarse)');
 const forcedColours = matchMedia('(forced-colors: active)');
+const appearanceChoices = new AppearanceChoices({ element, t, language: bootstrap.language, systemDark: () => media.matches });
 const feedTree = new FeedTree($('feed-tree'), element, { errorLabel: t('feedError') });
 const dateFormatter = new Intl.DateTimeFormat(bootstrap.language, { month: 'short', day: 'numeric' });
 const articleDateFormatter = new Intl.DateTimeFormat(bootstrap.language, { dateStyle: 'medium', timeStyle: 'short' });
@@ -186,27 +188,19 @@ function buildSettings() {
 		return rank(a) - rank(b);
 	});
 	for (const [key, spec] of fields) {
-		const label = element('label', spec.type === 'boolean' ? 'checkbox-setting' : spec.type === 'integer' ? 'range-setting' : '');
+		const visual = ['theme', 'lightTheme', 'darkTheme', 'layout', 'density', 'style'].includes(key);
+		const label = visual
+			? appearanceChoices.create(key, spec)
+			: element('label', spec.type === 'boolean' ? 'checkbox-setting' : spec.type === 'integer' ? 'range-setting' : '');
 		label.dataset.preference = key;
 		const heading = element('span', '', t(key));
 		let input;
-		if (spec.type === 'enum') {
+		if (visual) {
+			// Visual choices contain their own labelled native radio controls.
+		} else if (spec.type === 'enum') {
 			input = element('select');
-			if (['theme', 'lightTheme', 'darkTheme'].includes(key)) {
-				if (spec.options.includes('auto')) {
-					const option = element('option', '', t('auto')); option.value = 'auto'; input.append(option);
-				}
-				for (const dark of [false, true]) {
-					const group = element('optgroup'); group.label = t(dark ? 'darkPalette' : 'lightPalette');
-					for (const name of spec.options.filter(name => THEME_NAMES.includes(name) && themeSpec(name).dark === dark)) {
-						const option = element('option', '', themeName(name)); option.value = name; group.append(option);
-					}
-					input.append(group);
-				}
-			} else {
-				for (const option of spec.options) {
-					const node = element('option', '', t(option)); node.value = option; input.append(node);
-				}
+			for (const option of spec.options) {
+				const node = element('option', '', t(option)); node.value = option; input.append(node);
 			}
 		} else {
 			input = element('input');
@@ -216,16 +210,18 @@ function buildSettings() {
 				heading.append(element('small', 'setting-help', t(key + 'Help')));
 			}
 		}
-		input.name = key;
-		input.setAttribute('form', 'appearance-form');
-		input.required = spec.type !== 'boolean';
-		input.setAttribute('aria-describedby', 'settings-status');
-		label.append(heading);
-		if (spec.type === 'integer') {
-			const control = element('span', 'setting-number-control');
-			const unit = element('span', 'setting-unit', t(spec.unit)); unit.setAttribute('aria-hidden', 'true');
-			input.setAttribute('aria-label', `${t(key)} (${t(spec.unit)})`); control.append(input, unit); label.append(control);
-		} else label.append(input);
+		if (!visual) {
+			input.name = key;
+			input.setAttribute('form', 'appearance-form');
+			input.required = spec.type !== 'boolean';
+			input.setAttribute('aria-describedby', 'settings-status');
+			label.append(heading);
+			if (spec.type === 'integer') {
+				const control = element('span', 'setting-number-control');
+				const unit = element('span', 'setting-unit', t(spec.unit)); unit.setAttribute('aria-hidden', 'true');
+				input.setAttribute('aria-label', `${t(key)} (${t(spec.unit)})`); control.append(input, unit); label.append(control);
+			} else label.append(input);
+		}
 		const appearanceGroup = Object.keys(appearanceGroups).find(group => appearanceGroups[group].includes(key));
 		const section = appearanceGroup
 			? 'appearance'
@@ -245,10 +241,15 @@ function buildSettings() {
 			if (appearanceGroup === 'sizes') {
 				const details = element('details', 'advanced-settings'); details.append(element('summary', '', t(title)), group);
 				group.setAttribute('aria-label', t(title)); panel.append(details);
-			} else { group.append(element('legend', '', t(title))); panel.append(group); }
+			} else {
+				if (appearanceGroup === 'theme') group.setAttribute('aria-label', t(title));
+				else group.append(element('legend', '', t(title)));
+				panel.append(group);
+			}
 		}
 		groups.get(groupKey).append(label);
 	}
+	groups.get('theme')?.after(appearanceChoices.createPreview());
 	for (const section of ['storage', 'automation']) {
 		groups.get(section)?.after(element('p', 'settings-note', t(section === 'storage' ? 'cacheNote' : 'updateNote')));
 	}
@@ -285,13 +286,12 @@ function syncSettingsSave(values = formValues()) {
 	settingsPage.syncSavebar(!unchanged);
 }
 
-function themeName(name) { return name === 'cmyk' ? 'CMYK' : name === 'lofi' ? 'Lo-Fi' : name[0].toUpperCase() + name.slice(1); }
-
 function syncThemeSettings(values) {
 	for (const key of ['lightTheme', 'darkTheme']) {
 		const label = settingsRoot.querySelector(`[data-preference="${key}"]`);
 		if (label) label.hidden = values.theme !== 'auto';
 	}
+	appearanceChoices.sync(values, saved);
 }
 
 function formValues() {
@@ -303,11 +303,14 @@ function formValues() {
 
 function validateSettings(values, focus = false) {
 	const errors = preferenceErrors(values, schema);
-	for (const key of Object.keys(schema)) form.elements.namedItem(key).setAttribute('aria-invalid', String(errors.includes(key)));
+	for (const key of Object.keys(schema)) {
+		for (const input of preferenceInputs(key)) input.setAttribute('aria-invalid', String(errors.includes(key)));
+	}
 	if (errors.length) {
 		notice = t('invalidSettings') + errors.map(t).join(', ');
 		if (focus) {
-			const input = form.elements.namedItem(errors[0]);
+			const inputs = preferenceInputs(errors[0]);
+			const input = inputs.find(node => node.checked) || inputs[0];
 			const section = input?.closest('[data-settings-panel]')?.dataset.settingsPanel;
 			if (section) { navigation.setSettingsSection(section); settingsPage.activate(section); }
 			for (let parent = input?.parentElement; parent && parent !== form; parent = parent.parentElement) {
@@ -320,6 +323,11 @@ function validateSettings(values, focus = false) {
 	renderStatus();
 	syncSettingsSave(values);
 	return !errors.length;
+}
+
+function preferenceInputs(key) {
+	const control = form.elements.namedItem(key);
+	return control instanceof RadioNodeList ? Array.from(control) : [control];
 }
 
 function activeTheme() { return resolveTheme(current, media.matches); }
@@ -634,6 +642,7 @@ async function persist(values, token = appearanceToken()) {
 		store.cache.configure(saved.cacheArticles, saved.cacheMiB * bytesPerMiB);
 		api.timeoutSeconds = saved.requestTimeout;
 		applyAppearance(saved);
+		syncThemeSettings(formValues());
 		resetPolling();
 		notice = t(currentAppearanceToken(token) ? 'saved' : 'previousSettingsSaved'); store.error = null;
 		if (previousPageSize !== saved.pageSize) await queryList({});
@@ -945,7 +954,7 @@ document.addEventListener('keydown', event => {
 	} else if (event.key === 'm') $('mark-read').click();
 	else if (event.key === 's') $('mark-star').click();
 });
-media.addEventListener('change', () => applyAppearance(current));
+media.addEventListener('change', () => { applyAppearance(current); syncThemeSettings(formValues()); });
 forcedColours.addEventListener('change', () => applyAppearance(current));
 mobile.addEventListener('change', () => { syncFocusRegions(); syncQuickLayout(); });
 document.addEventListener('visibilitychange', resetPolling);

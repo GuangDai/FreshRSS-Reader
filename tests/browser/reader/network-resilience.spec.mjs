@@ -83,24 +83,26 @@ test('a stale preference response must not close a reopened settings draft', asy
 		await route.fulfill({ json: { version: 1, preferences } });
 	};
 	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption('dark');
-	await page.locator('#appearance-form [type=submit]').click();
+	await page.locator('input[type=radio][name=theme][value="dark"]').check();
+	await page.locator('#save-reader-settings').click();
 	await started.promise;
 	await page.locator('#cancel-settings').click();
 	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption('light');
+	await page.locator('input[type=radio][name=theme][value="light"]').check();
 	const response = page.waitForResponse(response => new URL(response.url()).searchParams.get('a') === 'preferences');
 	pending.resolve();
 	await response;
-	await expect(page.locator('#appearance-form [type=submit]')).toBeEnabled();
-	await expect(page.locator('#appearance-dialog')).toBeVisible();
-	await expect(page.locator('[name=theme]')).toHaveValue('light');
-	await expect(page.locator('body')).toHaveAttribute('data-theme', 'light');
+	await expect(page.locator('#save-reader-settings')).toBeEnabled();
+	await expect(page.locator('#settings-page')).toBeVisible();
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('light');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dark');
+	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', 'light');
 });
 
 for (const change of ['edit', 'reopen']) {
 	test(`a delayed server limit response preserves a ${change === 'reopen' ? 'reopened' : 'newer'} settings draft`, async ({ page }) => {
 		const { handlers, requests } = await fixture(page);
+		const originalTheme = await page.locator('body').getAttribute('data-theme');
 		const bootstrap = await page.locator('#reader-bootstrap').evaluate(node => JSON.parse(node.textContent));
 		const pending = deferred();
 		const started = deferred();
@@ -111,49 +113,55 @@ for (const change of ['edit', 'reopen']) {
 			});
 		};
 		await page.locator('#open-settings').click();
-		await page.locator('[name=theme]').selectOption('dracula');
+		await page.locator('input[type=radio][name=theme][value="dracula"]').check();
+		const sections = page.locator('#settings-section-select');
+		if (await sections.isVisible()) await sections.selectOption('advanced');
+		else await page.locator('[data-settings-section=advanced]').click();
 		await page.locator('.limits-details > summary').click();
 		await page.locator('#save-server-limits').click();
 		await started.promise;
 		if (change === 'reopen') {
 			await page.locator('#cancel-settings').click();
-			await expect(page.locator('#appearance-dialog')).not.toBeVisible();
+			await expect(page.locator('#settings-page')).not.toBeVisible();
 			await page.locator('#open-settings').click();
 		}
-		await page.locator('[name=theme]').selectOption('nord');
+		if (await sections.isVisible()) await sections.selectOption('appearance');
+		else await page.locator('[data-settings-section=appearance]').click();
+		await page.locator('input[type=radio][name=theme][value="nord"]').check();
 		const response = page.waitForResponse(response => new URL(response.url()).searchParams.get('a') === 'limits');
 		pending.resolve(); await response;
 		await expect(page.locator('#save-server-limits')).toBeEnabled();
-		await expect(page.locator('#appearance-dialog')).toBeVisible();
-		await expect(page.locator('[name=theme]')).toHaveValue('nord');
-		await expect(page.locator('body')).toHaveAttribute('data-theme', 'nord');
+		await expect(page.locator('#settings-page')).toBeVisible();
+		await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('nord');
+		await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+		await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', 'nord');
 		expect(requests.filter(action => action === 'limits')).toHaveLength(1);
 		expect(requests.filter(action => action === 'preferences')).toHaveLength(0);
 	});
 }
 
-test('a failed preference save keeps the appearance draft and preview consistent until cancellation', async ({ page }) => {
+test('a failed preference save keeps the local appearance draft without changing the saved theme', async ({ page }) => {
 	const { handlers, requests } = await fixture(page);
 	const originalTheme = await page.locator('body').getAttribute('data-theme');
 	handlers.preferences = route => route.fulfill({ status: 500, json: { version: 1, error: 'write_failed' } });
 	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption('dracula');
-	await page.locator('#appearance-form [type=submit]').click();
-	await expect(page.locator('#appearance-form [type=submit]')).toBeEnabled();
+	await page.locator('input[type=radio][name=theme][value="dracula"]').check();
+	await page.locator('#save-reader-settings').click();
+	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await expect(page.locator('#settings-status')).toBeVisible();
-	await expect(page.locator('#appearance-dialog')).toBeVisible();
-	await expect(page.locator('[name=theme]')).toHaveValue('dracula');
-	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
-	await expect(page.locator('#preview-theme-name')).toHaveText('Dracula');
-	await expect(page.locator('[data-choose-theme=dracula]')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('#settings-page')).toBeVisible();
+	await expect(page.locator('input[type=radio][name=theme]:checked')).toHaveValue('dracula');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
+	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', 'dracula');
+	await expect(page.locator('[data-preference=theme] [data-choice-value=dracula]')).toHaveAttribute('data-selected', 'true');
 	expect(requests.filter(action => action === 'preferences')).toHaveLength(1);
-	await page.locator('#appearance-form [type=submit]').click();
+	await page.locator('#save-reader-settings').click();
 	await expect.poll(() => requests.filter(action => action === 'preferences').length).toBe(2);
-	await expect(page.locator('#appearance-form [type=submit]')).toBeEnabled();
+	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await expect(page.locator('#settings-status')).toBeVisible();
-	await expect(page.locator('body')).toHaveAttribute('data-theme', 'dracula');
+	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
 	await page.locator('#cancel-settings').click();
-	await expect(page.locator('#appearance-dialog')).not.toBeVisible();
+	await expect(page.locator('#settings-page')).not.toBeVisible();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
 });
 
@@ -225,7 +233,7 @@ test('CSRF expiry preserves reading and stops further writes until a reload', as
 	expect(requests.filter(action => action === 'state')).toHaveLength(1);
 	await page.locator('#close-article').click();
 	await page.locator('#open-settings').click();
-	await expect(page.locator('#appearance-form [type=submit]')).toBeDisabled();
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
 });
 
 test('simulated page lifecycle releases pending content and ignores an interrupted preference save', async ({ page }) => {
@@ -238,18 +246,21 @@ test('simulated page lifecycle releases pending content and ignores an interrupt
 	};
 	await page.locator('.entry-card').first().click();
 	await expect(page.locator('#article-frame')).toBeVisible();
-	await page.locator('#open-settings').click();
-	await page.locator('[name=theme]').selectOption('dark');
-	await page.locator('#appearance-form [type=submit]').click();
+	// Keep the article in the background when phone reading covers the main toolbar.
+	await page.locator('#open-settings').dispatchEvent('click');
+	await page.locator('input[type=radio][name=theme][value="dark"]').check();
+	await page.locator('#save-reader-settings').click();
 	await started.promise;
 	await page.evaluate(() => window.dispatchEvent(new window.PageTransitionEvent('pagehide', { persisted: true })));
 	await expect(page.locator('#article-frame')).toBeHidden();
 	await expect(page.locator('#article-frame')).not.toHaveAttribute('srcdoc');
 	pending.resolve();
-	await expect(page.locator('#appearance-form [type=submit]')).toBeEnabled();
-	await expect(page.locator('#appearance-dialog')).toBeVisible();
+	await expect(page.locator('#save-reader-settings')).toBeEnabled();
+	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(page.locator('#settings-status')).toBeHidden();
 	await page.evaluate(() => window.dispatchEvent(new window.PageTransitionEvent('pageshow', { persisted: true })));
+	await page.locator('#cancel-settings').click();
+	await expect(page.locator('#settings-page')).toBeHidden();
 	await expect(page.locator('#article-frame')).toBeVisible();
 	await expect(page.locator('#article-frame')).toHaveAttribute('title', 'Network fixture 1');
 	await expect(page.locator('#article-pane')).toHaveAttribute('aria-busy', 'false');

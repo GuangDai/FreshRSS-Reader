@@ -3,7 +3,7 @@ import { AccountSettings } from './account.js';
 import { BackupSettings } from './backup.js';
 
 const sections = [
-	['appearance', '外观', 'Appearance', '选择主题、文章列表布局和显示方式，保存后生效。', 'Choose a theme, article layout and display style. Save to apply changes.', 'settings'],
+	['appearance', '外观', 'Appearance', '通过预览块选择主题和布局，保存后应用到阅读界面。', 'Choose a theme and layout from visual previews. Save to apply them to your reader.', 'settings'],
 	['reading', '阅读与操作', 'Reading', '正文排版、阅读行为、导航和快捷键。', 'Article typography, reading behaviour, navigation and keyboard shortcuts.', 'list'],
 	[
 		'subscriptions', '订阅与分类', 'Subscriptions',
