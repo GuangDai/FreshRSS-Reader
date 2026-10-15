@@ -323,3 +323,112 @@ test('an inherited reading state survives paging and searching until the user ch
 	requests[3].resolve({ items: [], next: null }); await filter;
 	assert.deepEqual(store.query, { get: 'T', filter: 'unread', search: 'RSS' });
 });
+
+test('continuous loading coalesces requests, appends without replacing the reading trail, and retains the origin cursor', async () => {
+	const { store, requests } = fixture();
+	const list = store.list({ filter: 'unread', get: 'c_12' });
+	requests[0].resolve({ items: [item('6'), item('5')], next: '5' }); await list;
+	store.selectedId = '5';
+	const first = store.items[0];
+	const more = store.loadMore({ background: true });
+	assert.equal(store.loadMore(), more);
+	assert.equal(store.loading, false); assert.equal(store.loadingMore, true);
+	assert.deepEqual(requests[1].params, { get: 'c_12', filter: 'unread', search: '', cursor: '5', limit: '2' });
+	requests[1].resolve({ items: [item('5'), item('4')], next: '4' }); await more;
+	assert.deepEqual(store.items.map(item => item.id), ['6', '5', '4']);
+	assert.equal(store.items[0], first); assert.equal(store.selectedId, '5'); assert.equal(store.cursor, '');
+	const end = store.loadMore(); requests[2].resolve({ items: [item('3')], next: '5' }); await end;
+	assert.equal(store.next, null); assert.equal(store.loadingMore, false);
+});
+
+test('a failed speculative continuation preserves the list and retries the same cursor only on demand', async () => {
+	const { store, requests } = fixture();
+	store.items = [item('3')]; store.next = '3'; store.selectedId = '3';
+	const more = store.loadMore({ background: true });
+	requests[0].reject(new Error('offline')); await more;
+	assert.equal(store.error, null); assert.equal(store.moreError.message, 'offline');
+	assert.equal(store.next, '3'); assert.equal(store.items.length, 1); assert.equal(store.selectedId, '3');
+	const retry = store.loadMore(); requests[1].resolve({ items: [item('2')], next: null }); await retry;
+	assert.equal(store.moreError, null); assert.equal(store.items.length, 2);
+});
+
+test('a delayed continuation cannot append to a newly selected scope even when abort is ignored', async () => {
+	const { store, requests } = fixture();
+	store.items = [item('old')]; store.next = 'old';
+	const more = store.loadMore();
+	const scope = store.list({ get: 'f_2', filter: 'unread' });
+	assert.equal(requests[0].options.signal.aborted, true);
+	requests[1].resolve({ items: [item('new')], next: null }); await scope;
+	requests[0].resolve({ items: [item('stale')], next: 'stale' }); await more;
+	assert.deepEqual(store.items.map(item => item.id), ['new']); assert.equal(store.next, null);
+});
+
+test('opening an in-flight preload reuses it and cancellation cannot cache abandoned bodies', async () => {
+	const { store, requests } = fixture(); store.cache.configure(4, 4096);
+	store.items = [item('4'), item('3'), item('2'), item('1')]; store.selectedId = '4';
+	store.prefetch(['3', '2', '1']);
+	assert.equal(requests.length, 2); assert.equal(store.preloads.size, 2);
+	const opening = store.open('3');
+	store.prefetch([]);
+	assert.equal(requests.length, 2); assert.equal(requests[0].options.signal.aborted, false);
+	assert.equal(requests[1].options.signal.aborted, true);
+	requests[0].resolve({ article: item('3', { content: 'preloaded body' }) }); await opening;
+	requests[1].resolve({ article: item('2', { content: 'abandoned body' }) });
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(store.article.content, 'preloaded body'); assert.equal(store.cache.get('2'), null);
+	assert.ok(requests.every(request => request.action === 'article'));
+});
+
+test('preloaded bodies retain a state write that finished before the body response', async () => {
+	const { store, requests } = fixture();
+	store.items = [item('1'), item('2')]; store.selectedId = '1';
+	store.prefetch(['2']);
+	const write = store.changeState('2', 'starred', true);
+	requests[1].resolve({ read: false, starred: true }); await write;
+	requests[0].resolve({ article: item('2', { content: 'body', starred: false }) });
+	await new Promise(resolve => setImmediate(resolve));
+	await store.open('2');
+	assert.equal(store.article.starred, true); assert.equal(requests.length, 2); assert.equal(store.stateOverrides.size, 0);
+});
+
+test('disabled caching prevents all speculative body requests and failed speculation leaves reading usable', async () => {
+	const { store, requests } = fixture();
+	store.cache.configure(0, 0); store.prefetch(['1', '2']); assert.equal(requests.length, 0);
+	store.cache.configure(4, 4096); store.prefetch(['1', '2']);
+	requests[0].reject(new Error('unavailable')); requests[1].resolve({ article: item('2') });
+	await new Promise(resolve => setImmediate(resolve));
+	store.prefetch(['1', '2']);
+	assert.equal(requests.length, 2); assert.equal(store.error, null);
+	const opening = store.open('1'); requests[2].resolve({ article: item('1') }); await opening;
+	assert.equal(store.article.id, '1'); assert.equal(store.error, null);
+});
+
+test('disposing cancels a continuation and every preload, including transports ignoring cancellation', async () => {
+	const { store, requests } = fixture();
+	store.items = [item('2')]; store.next = '2'; store.prefetch(['1']);
+	const more = store.loadMore(); store.dispose();
+	assert.ok(requests.every(request => request.options.signal.aborted));
+	requests[0].resolve({ article: item('1') }); requests[1].resolve({ items: [item('1')], next: null });
+	await more; await new Promise(resolve => setImmediate(resolve));
+	assert.equal(store.cache.bytes, 0); assert.equal(store.items.length, 1); assert.equal(store.preloads.size, 0);
+});
+
+for (const responseBeforeWrite of [true, false]) {
+	test(`a delayed unread-count poll cannot undo a single read (poll arrives before write: ${responseBeforeWrite})`, async () => {
+		const { store, requests } = fixture();
+		store.items = [item('1')]; store.feeds = [{ id: 1, unread: 1 }];
+		const poll = store.feedsRefresh();
+		const write = store.changeState('1', 'read', true);
+		if (responseBeforeWrite) {
+			requests[0].resolve({ feeds: [{ id: 1, unread: 1 }], categories: [] });
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(store.feeds[0].unread, 0);
+		}
+		requests[1].resolve({ read: true, starred: false }); await write;
+		if (!responseBeforeWrite) requests[0].resolve({ feeds: [{ id: 1, unread: 1 }], categories: [] });
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(requests.length, 3);
+		requests[2].resolve({ feeds: [{ id: 1, unread: 0 }], categories: [] }); await poll;
+		assert.equal(store.feeds[0].unread, 0);
+	});
+}

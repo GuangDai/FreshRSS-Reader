@@ -1,7 +1,7 @@
 import { browserConfig } from './base.mjs';
 
 export default browserConfig({
-	testMatch: '**/reader/reading-interactions.spec.mjs',
+	testMatch: ['**/reader/reading-interactions.spec.mjs', '**/reader/continuous-reading.spec.mjs'],
 	outputName: 'reading-interactions',
 	projects: [
 		{ name: 'desktop', use: { browserName: 'chromium' } },

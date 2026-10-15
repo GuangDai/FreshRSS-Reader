@@ -161,6 +161,10 @@ input[type="search"], select {
 
 .subscriptions-heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.subscriptions-heading > button { min-width: 0; min-height: 44px; padding-inline: 8px; color: var(--muted); font-size: .9333rem; }
+
+.subscriptions-heading > button[aria-current="page"] { color: var(--accent); font-weight: 650; }
+
 .subscriptions-heading a { padding: 8px; display: inline-flex; min-width: 44px; min-height: 44px; font-size: .9333rem; border-radius: var(--radius-field); align-items: center; justify-content: center; flex-shrink: 0; white-space: nowrap; }
 
 .subscriptions-tools { display: flex; min-width: 0; align-items: center; gap: 2px; }
@@ -459,6 +463,10 @@ input, select, textarea { min-width: 0; }
 	.subscriptions-heading { margin-top: 4px; }
 
 	.toolbar { padding-block: max(6px, env(safe-area-inset-top)) 6px; gap: 4px 8px; }
+
+	.pagination { padding-block: 6px; grid-template-rows: 44px; }
+
+	.pagination button { height: 44px; min-height: 44px; }
 
 	.article-actions { padding-block: max(4px, env(safe-area-inset-top)) 4px; }
 

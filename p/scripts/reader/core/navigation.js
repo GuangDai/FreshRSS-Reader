@@ -23,6 +23,8 @@ function snapshot(value = {}) {
 		history: Array.isArray(value.history) ? value.history.filter(cursor => typeof cursor === 'string') : [],
 		selectedId: typeof value.selectedId === 'string' && value.selectedId ? value.selectedId : null,
 		listScroll: Number.isFinite(value.listScroll) && value.listScroll >= 0 ? value.listScroll : 0,
+		...(Number.isSafeInteger(value.loadedCount) && value.loadedCount > 0 ? { loadedCount: value.loadedCount } : {}),
+		...(typeof value.listAnchor === 'string' && value.listAnchor ? { listAnchor: value.listAnchor } : {}),
 	};
 }
 
@@ -30,13 +32,19 @@ function depth(value) { return Number(Boolean(value.snapshot.selectedId)) + valu
 
 /** Browser history contains navigation metadata only, never article bodies or account configuration. */
 export class ReaderNavigation {
-	constructor({ history, location, onRestore }) {
+	constructor({ history, location, onRestore, storage = null, storageKey = stateKey, restoreStorage = false }) {
 		this.history = history;
 		this.location = location;
 		this.onRestore = onRestore;
 		this.current = null;
 		this.pending = null;
 		this.lastFrameNavigation = null;
+		this.writeTimes = [];
+		this.lastWriteAt = -Infinity;
+		this.pendingWrite = null;
+		this.writeTimer = null;
+		this.lastArticle = null;
+		Object.assign(this, { storage, storageKey, restoreStorage });
 	}
 
 	read(value) {
@@ -52,9 +60,11 @@ export class ReaderNavigation {
 	}
 
 	start(initial) {
-		const existing = this.read(this.history.state);
+		const historyState = this.read(this.history.state); const stored = this.storedNavigation();
+		const existing = stored && (!historyState || historyState.session === stored.session) ? stored : historyState;
 		if (existing) {
 			this.current = existing;
+			if (existing.snapshot.selectedId) this.lastArticle = existing.snapshot;
 			this.write(existing, false);
 			return snapshot(existing.snapshot);
 		}
@@ -88,6 +98,39 @@ export class ReaderNavigation {
 		return snapshot(this.current.snapshot);
 	}
 
+	storedNavigation() {
+		if (![true, 'reload', 'back_forward'].includes(this.restoreStorage)) return null;
+		try {
+			const stored = JSON.parse(this.storage?.getItem(this.storageKey) || 'null');
+			const candidates = [stored, stored?.list, stored?.article].filter(Boolean);
+			const match = candidates.find(value => value.url === this.location.href) ||
+				(this.restoreStorage !== 'back_forward' && candidates.find(value => value.source === this.location.href));
+			return match ? this.read({ [stateKey]: match.value }) : null;
+		} catch { return null; }
+	}
+
+	remember(value, url) {
+		// WebKit can discard history.state on reload. Persist only navigation metadata in this tab and account.
+		if (!this.storage) return;
+		try {
+			const previous = JSON.parse(this.storage.getItem(this.storageKey) || 'null');
+			const current = { url, source: this.location.href, value: this.read({ [stateKey]: value }) };
+			const listURL = new URL(url);
+			for (const key of ['article', 'view', 'section']) listURL.searchParams.delete(key);
+			const list = {
+				url: listURL.href,
+				value: this.read({
+					[stateKey]: {
+						...value,
+						panels: [],
+						snapshot: { ...value.snapshot, selectedId: null, listAnchor: value.snapshot.selectedId || value.snapshot.listAnchor }
+					}
+				})
+			};
+			this.storage.setItem(this.storageKey, JSON.stringify({ ...current, list, article: value.snapshot.selectedId ? current : previous?.article }));
+		} catch {}
+	}
+
 	get panel() { return this.current?.panels.at(-1) || null; }
 	get settingsSection() { return settingsSection(this.current?.settingsSection); }
 
@@ -96,7 +139,9 @@ export class ReaderNavigation {
 		this.transition({ ...this.current, settingsSection: section }, false);
 	}
 
-	write(value, push) {
+	write(value, push, immediate = false) {
+		if (push) this.flushWrite();
+		if (value.snapshot.selectedId) this.lastArticle = value.snapshot;
 		const url = new URL(this.location.href);
 		const data = value.snapshot;
 		const explicitAll = !data.query.state && (url.searchParams.has('filter') || url.searchParams.has('state'));
@@ -116,11 +161,40 @@ export class ReaderNavigation {
 			url.searchParams.delete('view');
 			url.searchParams.delete('section');
 		}
+		this.remember(value, url.href);
 		// Avoid rewriting unchanged entries, including when a completed Back already
 		// restored the desired state. WebKit limits history writes in short intervals.
 		if (!push && url.href === this.location.href &&
-			JSON.stringify(this.read(this.history.state)) === JSON.stringify(this.read({ [stateKey]: value }))) return;
-		this.history[push ? 'pushState' : 'replaceState']({ ...this.history.state, [stateKey]: value }, '', url.href);
+			JSON.stringify(this.read(this.history.state)) === JSON.stringify(this.read({ [stateKey]: value }))) { this.cancelWrite(); return; }
+		const now = Date.now();
+		this.writeTimes = this.writeTimes.filter(time => now - time < 10000);
+		// Coalesce rapid article steps before WebKit's history quota can interrupt reading.
+		if (!push && !immediate && this.writeTimes.length >= 20 && now - this.lastWriteAt < 250) {
+			this.deferWrite(value, 250 - (now - this.lastWriteAt)); return;
+		}
+		this.cancelWrite();
+		try {
+			this.history[push ? 'pushState' : 'replaceState']({ ...this.history.state, [stateKey]: value }, '', url.href);
+			this.writeTimes.push(now); this.lastWriteAt = now;
+		} catch (error) {
+			if (push || error.name !== 'SecurityError') throw error;
+			this.deferWrite(value, 1000);
+		}
+	}
+
+	deferWrite(value, delay) {
+		this.cancelWrite(); this.pendingWrite = value;
+		this.writeTimer = setTimeout(() => this.flushWrite(), delay);
+	}
+
+	cancelWrite() {
+		clearTimeout(this.writeTimer); this.writeTimer = null; this.pendingWrite = null;
+	}
+
+	flushWrite() {
+		const value = this.pendingWrite;
+		this.cancelWrite();
+		if (value) this.write(value, false, true);
 	}
 
 	restore() { this.onRestore(snapshot(this.current.snapshot), this.panel); }
@@ -201,7 +275,9 @@ export class ReaderNavigation {
 
 	transition(next, notify, rebase = false) {
 		const previous = this.current;
+		if (rebase || depth(next) !== depth(previous)) this.flushWrite();
 		this.current = next;
+		if (next.snapshot.selectedId) this.lastArticle = next.snapshot;
 		if (this.pending) {
 			// back() is asynchronous. A new tap must survive its eventual popstate.
 			this.pending.desired = next;
@@ -225,6 +301,7 @@ export class ReaderNavigation {
 	handlePopState(event) {
 		const target = this.read(event.state);
 		if (!target || target.session !== this.current.session) return;
+		this.cancelWrite();
 		if (this.pending) {
 			const desired = this.pending.desired;
 			const rebase = this.pending.rebase;
@@ -255,6 +332,10 @@ export class ReaderNavigation {
 			// Moving between articles can also turn a list page. Closing preserves that list.
 			target.snapshot = { ...this.current.snapshot, selectedId: target.snapshot.selectedId };
 			this.write(target, false);
+		} else if (target.snapshot.selectedId && !this.current.snapshot.selectedId && this.lastArticle &&
+			this.lastArticle.cursor === target.snapshot.cursor && JSON.stringify(this.lastArticle.query) === JSON.stringify(target.snapshot.query)) {
+			// Native Back may arrive before a coalesced write. Forward still returns to the last article read.
+			target.snapshot = snapshot(this.lastArticle); this.write(target, false);
 		}
 		this.current = target;
 		this.restore();

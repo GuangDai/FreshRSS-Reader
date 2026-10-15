@@ -245,6 +245,65 @@ final class HomeReadingTest extends \PHPUnit\Framework\TestCase {
 		}
 	}
 
+	public function testUnreadScopesContinueBeyondFiftyWithoutSkippingWhenTheCursorArticleBecomesRead(): void {
+		$database = new PDO('sqlite:' . $this->directory . '/users/homeowner/db.sqlite');
+		$database->exec("INSERT INTO category (id, name) VALUES (2, 'Other category')");
+		$database->exec("INSERT INTO feed (id, url, name, category) VALUES
+			(43, 'https://example.com/other', 'Other feed', 2), (44, 'https://example.com/same', 'Same category feed', 1)");
+		$insert = $database->prepare('INSERT INTO entry (id, guid, title, content, link, date, id_feed, is_read, is_favorite)
+			VALUES (?, ?, ?, ?, ?, 1700000000, ?, ?, 0)');
+		self::assertNotFalse($insert);
+		$expected = ['a' => [], 'c_1' => [], 'f_42' => []];
+		for ($index = 0; $index < 360; $index++) {
+			$id = (string)(1000360 - $index);
+			$feed = 42 + $index % 3;
+			$read = $index % 5 === 0;
+			$insert->execute([$id, 'continuous-' . $id, 'Continuous article ' . $id, '<p>Body</p>', '', $feed, (int)$read]);
+			if (!$read) {
+				$expected['a'][] = $id;
+				if ($feed !== 43) {
+					$expected['c_1'][] = $id;
+				}
+				if ($feed === 42) {
+					$expected['f_42'][] = $id;
+				}
+			}
+		}
+		foreach ($expected as $scope => $ids) {
+			$database->exec('UPDATE entry SET is_read=CASE WHEN (1000360-id)%5=0 THEN 1 ELSE 0 END');
+			$database->exec('UPDATE feed SET cache_nbEntries=(SELECT COUNT(*) FROM entry WHERE id_feed=feed.id),
+				cache_nbUnreads=(SELECT COUNT(*) FROM entry WHERE id_feed=feed.id AND is_read=0)');
+			$cursor = '';
+			$actual = [];
+			$pages = 0;
+			do {
+				$page = $this->jsonResponse($this->request('/i/?' . http_build_query([
+					'c' => 'reader', 'a' => 'items', 'get' => $scope, 'filter' => 'unread', 'cursor' => $cursor, 'limit' => 50,
+				])));
+				self::assertIsArray($page['items']);
+				foreach ($page['items'] as $item) {
+					self::assertIsArray($item);
+					self::assertFalse($item['read']);
+					self::assertIsString($item['id']);
+					self::assertArrayNotHasKey('content', $item);
+					$actual[] = $item['id'];
+				}
+				self::assertArrayHasKey('next', $page);
+				$cursor = $page['next'];
+				self::assertTrue(is_string($cursor) || $cursor === null);
+				if ($cursor !== null) {
+					$changed = $this->jsonResponse($this->request('/i/?c=reader&a=state', true, 'POST',
+						['_csrf' => 'home-fixture-csrf', 'id' => $cursor, 'read' => true]));
+					self::assertTrue($changed['read']);
+				}
+				$pages++;
+				self::assertLessThan(10, $pages, 'Cursor pagination must make forward progress');
+			} while ($cursor !== null);
+			self::assertGreaterThan(1, $pages);
+			self::assertSame($ids, $actual, 'Unread scope lost or duplicated articles: ' . $scope);
+		}
+	}
+
 	public function testLegacyReadAndFavouriteStatesSurviveTheHomepageTransition(): void {
 		self::assertSame(['get' => 'a', 'filter' => 'all', 'search' => '', 'state' => 1], $this->initialQuery('/i/?state=1'));
 		$this->setUserPreferences(['default_view' => 'unread_or_favorite']);

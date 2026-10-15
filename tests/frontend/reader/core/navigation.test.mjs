@@ -476,3 +476,62 @@ test('compound reading state URLs remain unambiguous after sharing without brows
 	const shared = fixture(f.location.href);
 	assert.equal(shared.navigation.start(initial()).query.state, 96);
 });
+
+test('rapid reading coalesces history writes and preserves the final article and list extent', () => {
+	const { navigation, writes, history, location } = fixture();
+	navigation.start(initial());
+	for (let index = 0; index < 150; index++) {
+		navigation.openArticle(String(index + 1), { ...initial(), loadedCount: 200, listScroll: 1200 });
+	}
+	assert.equal(navigation.current.snapshot.selectedId, '150'); assert.equal(history.length, 2);
+	assert.ok(writes.length < 40, 'A reading burst must not consume the browser history quota.');
+	navigation.flushWrite();
+	assert.equal(new URL(location.href).searchParams.get('article'), '150');
+	assert.equal(history.state.freshrssReader.snapshot.loadedCount, 200);
+	assert.equal(navigation.pendingWrite, null);
+});
+
+test('native Back before a delayed write preserves the latest position for Forward', () => {
+	const { navigation, restored, flush } = fixture();
+	navigation.start(initial());
+	for (let index = 0; index < 120; index++) navigation.openArticle(String(index + 1), { ...initial(), loadedCount: 150, listScroll: 720 });
+	assert.ok(navigation.pendingWrite);
+	flush(-1);
+	assert.equal(restored.at(-1).state.selectedId, null); assert.equal(restored.at(-1).state.loadedCount, 150);
+	flush(1);
+	assert.equal(restored.at(-1).state.selectedId, '120'); assert.equal(restored.at(-1).state.listScroll, 720);
+	navigation.flushWrite();
+});
+
+test('reload recovers the last reading position when the browser discards history state before a coalesced URL write', () => {
+	const f = fixture();
+	const values = new Map();
+	const storage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) };
+	const navigation = new ReaderNavigation({ history: f.history, location: f.location, storage, onRestore() {} });
+	navigation.start(initial());
+	for (let index = 0; index < 120; index++) {
+		navigation.openArticle(String(index + 1), { ...initial(), loadedCount: 150, content: 'must not persist' });
+	}
+	assert.ok(navigation.pendingWrite);
+	navigation.cancelWrite(); f.entries.at(-1).state = null;
+	const reloaded = new ReaderNavigation({ history: f.history, location: f.location, storage, restoreStorage: true, onRestore() {} });
+	const value = reloaded.start(initial());
+	assert.equal(value.selectedId, '120'); assert.equal(value.loadedCount, 150);
+	assert.equal(value.query.filter, 'all'); assert.equal(f.history.length, 2);
+	assert.ok([...values.values()].every(value => !value.includes('must not persist')));
+	f.entries.at(-1).state = null; f.location.href = 'https://reader.test/i/';
+	const back = new ReaderNavigation({ history: f.history, location: f.location, storage, restoreStorage: 'back_forward', onRestore() {} });
+	const list = back.start(initial());
+	assert.equal(list.selectedId, null); assert.equal(list.loadedCount, 150); assert.equal(list.listAnchor, '120');
+	f.entries.at(-1).state = null; f.location.href = 'https://reader.test/i/?article=120';
+	const forward = new ReaderNavigation({ history: f.history, location: f.location, storage, restoreStorage: 'back_forward', onRestore() {} });
+	assert.equal(forward.start(initial()).selectedId, '120');
+});
+
+test('unavailable tab storage cannot prevent reading or add content to history', () => {
+	const f = fixture();
+	const storage = { getItem() { throw new Error('unavailable'); }, setItem() { throw new Error('quota'); } };
+	const navigation = new ReaderNavigation({ history: f.history, location: f.location, storage, restoreStorage: true, onRestore() {} });
+	navigation.start(initial()); navigation.openArticle('120', initial());
+	assert.equal(navigation.current.snapshot.selectedId, '120');
+});

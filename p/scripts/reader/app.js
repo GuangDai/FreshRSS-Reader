@@ -1,5 +1,6 @@
 import { ReaderAPI } from './core/api.js';
 import { ReaderStore } from './core/store.js';
+import { ReadingPreloader } from './core/preloading.js';
 import { articleDocument, safeLink } from './articles/document.js';
 import { defaults, preferences, preferenceErrors } from './core/preferences.js';
 import { translator } from './core/i18n.js';
@@ -43,6 +44,7 @@ settingsPage.mount();
 const media = matchMedia('(prefers-color-scheme: dark)');
 const mobile = matchMedia('(max-width: 820px), (max-height: 500px) and (max-width: 1100px) and (any-pointer: coarse)');
 const forcedColours = matchMedia('(forced-colors: active)');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const appearanceChoices = new AppearanceChoices({ element, t, language: bootstrap.language, systemDark: () => media.matches });
 const feedTree = new FeedTree($('feed-tree'), element, {
 	errorLabel: t('feedError'),
@@ -55,6 +57,9 @@ const feedTree = new FeedTree($('feed-tree'), element, {
 const dateFormatter = new Intl.DateTimeFormat(bootstrap.language, { month: 'short', day: 'numeric' });
 const articleDateFormatter = new Intl.DateTimeFormat(bootstrap.language, { dateStyle: 'medium', timeStyle: 'short' });
 let renderedItems = null;
+let renderedListFeeds = null;
+let renderedSelection = null;
+let renderedPending = new Set();
 const entryNodes = new Map();
 let frameKey = '';
 let appearancePalette = null;
@@ -99,7 +104,26 @@ const feedEditor = new FeedEditor({
 	onStatus: message => { notice = message; renderStatus(); renderFeedSelection(); },
 });
 let navigationEpoch = 0;
-const navigation = new ReaderNavigation({ history: window.history, location: window.location, onRestore: restoreNavigation });
+let restoringNavigation = false;
+let centeringFrame = 0;
+let centeredSelection = null;
+let followSelection = true;
+let navigationStorage = null;
+try { navigationStorage = window.sessionStorage; } catch {}
+const navigation = new ReaderNavigation({
+	history: window.history,
+	location: window.location,
+	onRestore: restoreNavigation,
+	storage: navigationStorage,
+	storageKey: `freshrssReader:${location.pathname}:${JSON.stringify([Boolean(bootstrap.readOnly), bootstrap.username || ''])}`,
+	restoreStorage: performance.getEntriesByType('navigation')[0]?.type,
+});
+const preloader = new ReadingPreloader(store, {
+	active: () => pageActive && !restoringNavigation && settingsRoot.hidden && document.visibilityState !== 'hidden' &&
+		navigator.onLine !== false && store.error?.status !== 403,
+	connection: navigator.connection,
+	onMore: () => loadMoreArticles(true),
+});
 
 function sameList(value) {
 	return store.cursor === value.cursor && ['get', 'filter', 'search', 'state'].every(key => store.query[key] === value.query[key]);
@@ -110,7 +134,14 @@ function navigationSnapshot() {
 	if (store.selectedId && (mobile.matches || current.layout !== 'split') && navigation.current) {
 		listScroll = sameList(navigation.current.snapshot) ? navigation.current.snapshot.listScroll : 0;
 	}
-	return { query: { ...store.query }, cursor: store.cursor, history: [...store.history], selectedId: store.selectedId, listScroll };
+	return {
+		query: { ...store.query },
+		cursor: store.cursor,
+		history: [...store.history],
+		selectedId: store.selectedId,
+		listScroll,
+		loadedCount: store.items.length
+	};
 }
 
 function restoreListScroll(value) { $('article-list').scrollTop = value; }
@@ -118,6 +149,7 @@ function restoreListScroll(value) { $('article-list').scrollTop = value; }
 async function restoreNavigation(value, panel, load = false) {
 	clearTimeout(searchTimer);
 	const epoch = ++navigationEpoch;
+	preloader.suspend(); restoringNavigation = true;
 	cancelArticleNavigation();
 	const previousId = store.selectedId;
 	const previousSidebar = document.body.dataset.sidebarOpen === 'true';
@@ -148,13 +180,26 @@ async function restoreNavigation(value, panel, load = false) {
 	restoreListScroll(value.listScroll);
 	const loaded = await list;
 	if (epoch !== navigationEpoch) return false;
-	if (loaded) { restoreListScroll(value.listScroll); render(); }
+	if (loaded) await store.restoreRange(value.loadedCount || 0);
+	if (epoch !== navigationEpoch) return false;
+	restoringNavigation = false;
+	if (loaded) {
+		restoreListScroll(value.listScroll); render();
+		if (load && value.selectedId) centerSelection();
+		const anchor = previousId || value.listAnchor;
+		if (!value.selectedId && anchor && !panel) {
+			const item = entryNodes.get(anchor)?.button.getBoundingClientRect();
+			const bounds = $('article-list').getBoundingClientRect();
+			if (item && (item.top < bounds.top || item.bottom > bounds.bottom)) centerListItem(anchor, 'instant');
+		}
+	}
 	return loaded;
 }
 
 async function queryList(query) {
 	clearTimeout(searchTimer);
 	const epoch = ++navigationEpoch;
+	restoringNavigation = false; preloader.suspend();
 	cancelArticleNavigation();
 	const request = store.list(query);
 	restoreListScroll(0);
@@ -284,9 +329,11 @@ function buildSettings() {
 
 function fillSettings(values) {
 	for (const [key, spec] of Object.entries(schema)) {
-		const input = form.elements.namedItem(key);
-		if (spec.type === 'boolean') input.checked = values[key];
-		else input.value = values[key];
+		for (const input of preferenceInputs(key)) {
+			if (input.type === 'radio') input.checked = input.value === values[key];
+			else if (spec.type === 'boolean') input.checked = values[key];
+			else input.value = values[key];
+		}
 	}
 	syncThemeSettings(values);
 	syncSettingsSave(values);
@@ -311,7 +358,7 @@ function syncThemeSettings(values) {
 function formValues() {
 	if (!settingsBuilt) return { ...(readerDraft || saved) };
 	return Object.fromEntries(Object.entries(schema).map(([key, spec]) => {
-		const input = form.elements.namedItem(key);
+		const inputs = preferenceInputs(key); const input = inputs.find(input => input.checked) || inputs[0];
 		return [key, spec.type === 'boolean' ? input.checked : spec.type === 'integer' ? input.valueAsNumber : input.value];
 	}));
 }
@@ -341,8 +388,8 @@ function validateSettings(values, focus = false) {
 }
 
 function preferenceInputs(key) {
-	const control = form.elements.namedItem(key);
-	return control instanceof RadioNodeList ? Array.from(control) : control ? [control] : [];
+	// Query the controls directly: WebKit can delay association with an external form after insertion.
+	return [...settingsRoot.querySelectorAll(`[form="appearance-form"][name="${CSS.escape(key)}"]`)];
 }
 
 function activeTheme() { return resolveTheme(current, media.matches); }
@@ -375,6 +422,7 @@ function applyAppearance(values) {
 	settingsPage.syncToolAppearance();
 	renderArticle();
 	syncFocusRegions();
+	centerSelection(); measureList();
 	appearanceFrame = requestAnimationFrame(() => {
 		appearanceFrame = requestAnimationFrame(() => document.body.classList.remove('appearance-changing'));
 	});
@@ -402,9 +450,10 @@ function renderFeeds() {
 	const unread = feedTree.unread.toLocaleString(bootstrap.language);
 	if ($('total-unread').textContent !== unread) $('total-unread').textContent = unread;
 	document.querySelectorAll('[data-filter]').forEach(button => {
-		const selected = store.query.get === 'a' && button.dataset.filter === store.query.filter ? 'page' : 'false';
+		const selected = button.dataset.filter === store.query.filter ? 'page' : 'false';
 		if (button.getAttribute('aria-current') !== selected) button.setAttribute('aria-current', selected);
 	});
+	$('all-subscriptions').setAttribute('aria-current', store.query.get === 'a' ? 'page' : 'false');
 }
 
 function filterFeeds() {
@@ -426,8 +475,12 @@ function renderList() {
 	$('article-list').setAttribute('aria-busy', String(store.loading));
 	const unread = store.items.some(item => !item.read);
 	$('mark-page-read').hidden = Boolean(bootstrap.readOnly);
-	$('previous-page').disabled = store.loading || !store.history.length;
-	$('next-page').disabled = store.loading || !store.next;
+	$('previous-page').disabled = store.loading || $('article-list').scrollTop < 1;
+	$('next-page').disabled = store.loading || store.loadingMore || !store.next;
+	$('next-page').setAttribute('aria-busy', String(store.loadingMore));
+	$('next-page').textContent = t(store.loadingMore ? 'loadingMore' : store.moreError ? 'retryMore' : store.next ? 'loadMore' : 'endOfList');
+	$('mark-page-read').title = t('markPageRead').replace('{count}', store.items.filter(item => !item.read).length);
+	$('mark-page-read').setAttribute('aria-label', $('mark-page-read').title);
 	$('mark-page-read').disabled = store.csrfInvalid || store.loading || store.pending.size > 0 ||
 		navigator.onLine === false || !unread;
 	const scopeId = Number(store.query.get.slice(2));
@@ -435,7 +488,9 @@ function renderList() {
 	const category = store.query.get.startsWith('c_') ? store.categories.find(category => category.id === scopeId) : null;
 	let summary = store.loading
 		? t('loading')
-		: t('pageSummary').replace('{page}', String(store.history.length + 1)).replace('{count}', String(store.items.length));
+		: t('listSummary').replace('{count}', String(store.items.length));
+	if (store.loadingMore) summary += ' · ' + t('loadingMore');
+	else if (store.moreError) summary += ' · ' + t('retryMore');
 	if (category) {
 		summary += ' · ' + t('categoryUnreadSummary').replace('{count}',
 			(feedTree.groups.get(category.id)?.unread ?? 0).toLocaleString(bootstrap.language));
@@ -445,30 +500,38 @@ function renderList() {
 	const scope = feed || category;
 	const title = scope ? scope.name + (store.query.filter === 'all' ? '' : ' · ' + t(store.query.filter)) : t(store.query.filter);
 	$('view-title').textContent = title; $('view-title').title = title;
+	const itemsChanged = renderedItems !== store.items;
 	if (renderedItems !== store.items) {
 		renderedItems = store.items;
-		entryNodes.clear();
-		const fragment = document.createDocumentFragment();
-		for (const item of store.items) {
-			const button = element('button', 'entry-card'); button.type = 'button'; button.dataset.id = item.id;
-			const meta = element('span', 'entry-meta');
-			const feedName = element('span', '', feedTree.feedsById.get(item.feedId)?.name || '');
-			const date = new Date(item.date * 1000);
-			const validDate = !Number.isNaN(date.getTime());
-			const time = element('time', '', validDate
-				? dateFormatter.format(date)
-				: '');
-			if (validDate) time.dateTime = date.toISOString();
-			const author = element('span', 'entry-author');
-			const state = element('span', 'entry-state reader-icon icon-starred'); state.setAttribute('aria-hidden', 'true');
-			meta.append(state, feedName, author, time);
-			button.append(element('h2', '', item.title), meta);
-			fragment.append(button);
-			entryNodes.set(item.id, { button, state, feedName, author });
+		const ids = new Set(store.items.map(item => item.id));
+		for (const [id, node] of entryNodes) {
+			if (!ids.has(id)) { node.button.remove(); entryNodes.delete(id); }
 		}
-		if (!store.items.length) fragment.append(element('p', 'empty-state', store.loading ? t('loading') : t('empty')));
-		$('article-list').replaceChildren(fragment);
-		$('article-list').scrollTop = 0;
+		$('article-list').querySelector('.empty-state')?.remove();
+		for (const [index, item] of store.items.entries()) {
+			let node = entryNodes.get(item.id);
+			if (!node) {
+				const button = element('button', 'entry-card'); button.type = 'button'; button.dataset.id = item.id;
+				const meta = element('span', 'entry-meta');
+				const feedName = element('span', '', feedTree.feedsById.get(item.feedId)?.name || '');
+				const date = new Date(item.date * 1000);
+				const validDate = !Number.isNaN(date.getTime());
+				const time = element('time', '', validDate
+					? dateFormatter.format(date)
+					: '');
+				if (validDate) time.dateTime = date.toISOString();
+				const author = element('span', 'entry-author');
+				const state = element('span', 'entry-state reader-icon icon-starred'); state.setAttribute('aria-hidden', 'true');
+				meta.append(state, feedName, author, time);
+				button.append(element('h2', '', item.title), meta);
+				node = { button, state, feedName, author }; entryNodes.set(item.id, node);
+			}
+			node.item = item;
+			if ($('article-list').children[index] !== node.button) {
+				$('article-list').insertBefore(node.button, $('article-list').children[index] || null);
+			}
+		}
+		if (!store.items.length) $('article-list').append(element('p', 'empty-state', store.loading ? t('loading') : t('empty')));
 	}
 	const empty = $('article-list').querySelector('.empty-state');
 	if (empty) {
@@ -477,21 +540,67 @@ function renderList() {
 			const clear = element('button', '', t('clearSearch')); clear.type = 'button'; clear.dataset.clearSearch = 'true'; empty.append(clear);
 		}
 	}
-	for (const item of store.items) {
+	// State and article loads normally touch only the active and pending rows, even in a long reading session.
+	const metadataChanged = itemsChanged || renderedListFeeds !== store.feeds;
+	const rows = metadataChanged
+		? store.items
+		: [...new Set([store.selectedId, renderedSelection, ...store.pending, ...renderedPending])].map(id => entryNodes.get(id)?.item).filter(Boolean);
+	renderedListFeeds = store.feeds; renderedSelection = store.selectedId; renderedPending = new Set(store.pending);
+	for (const item of rows) {
 		const node = entryNodes.get(item.id);
-		for (const [key, value] of Object.entries({
-			'data-read': String(item.read),
-			'aria-current': String(item.id === store.selectedId),
-			'aria-busy': String(store.pending.has(item.id)),
-			'aria-label': `${item.title} · ${t(item.read ? 'readState' : 'unread')}${item.starred ? ' · ' + t('starred') : ''}`,
-		})) if (node.button.getAttribute(key) !== value) node.button.setAttribute(key, value);
-		node.state.hidden = !item.starred;
+		const key = [item.read, item.starred, item.id === store.selectedId, store.pending.has(item.id), item.title].join(':');
+		if (key !== node.stateKey) {
+			node.stateKey = key;
+			for (const [key, value] of Object.entries({
+				'data-read': String(item.read),
+				'aria-current': String(item.id === store.selectedId),
+				'aria-busy': String(store.pending.has(item.id)),
+				'aria-label': `${item.title} · ${t(item.read ? 'readState' : 'unread')}${item.starred ? ' · ' + t('starred') : ''}`,
+			})) if (node.button.getAttribute(key) !== value) node.button.setAttribute(key, value);
+			node.state.hidden = !item.starred;
+		}
+		if (!metadataChanged) continue;
 		const name = feedTree.feedsById.get(item.feedId)?.name || '';
 		if (node.feedName.textContent !== name) node.feedName.textContent = name;
 		const author = item.author?.trim();
 		node.author.hidden = !author || author === name.trim();
 		if (node.author.textContent !== author) node.author.textContent = author || '';
 	}
+	if (centeredSelection !== store.selectedId) {
+		followSelection = true; centeredSelection = store.selectedId; centerSelection();
+	} else if (itemsChanged && followSelection && !restoringNavigation) centerSelection();
+	if (itemsChanged) measureList();
+}
+
+function centerSelection() {
+	cancelAnimationFrame(centeringFrame);
+	if (!store.selectedId || mobile.matches || current.layout !== 'split' || !settingsRoot.hidden || restoringNavigation) return;
+	centeringFrame = requestAnimationFrame(() => {
+		if (followSelection) centerListItem(store.selectedId, reducedMotion.matches ? 'instant' : 'smooth');
+	});
+}
+
+function centerListItem(id, behavior) {
+	const button = entryNodes.get(id)?.button;
+	if (!button) return;
+	const list = $('article-list'); const bounds = list.getBoundingClientRect(); const item = button.getBoundingClientRect();
+	const top = list.scrollTop + item.top - bounds.top - (list.clientHeight - item.height) / 2;
+	list.scrollTo({ top: Math.max(0, top), behavior });
+}
+
+function measureList(intent = false, velocity = 0) {
+	const list = $('article-list'); const first = list.querySelector('.entry-card');
+	const bounds = first?.getBoundingClientRect();
+	const columns = bounds?.width ? Math.max(1, Math.floor(list.clientWidth / bounds.width)) : 1;
+	const rows = list.clientHeight / (bounds?.height || 90) * columns;
+	preloader.viewport(rows, list.scrollHeight - list.scrollTop - list.clientHeight, velocity, intent);
+}
+
+async function loadMoreArticles(background = false) {
+	const epoch = store.listEpoch;
+	const loaded = await store.loadMore({ background });
+	if (loaded && epoch === store.listEpoch) navigation.replace(navigationSnapshot());
+	return loaded;
 }
 
 function renderArticle() {
@@ -607,6 +716,7 @@ function renderStatus() {
 
 function render() {
 	renderFeeds(); renderList(); renderArticle(); renderStatus(); syncFocusRegions();
+	preloader.update();
 	if (autoReadSelection !== store.selectedId) autoReadSelection = null;
 	const article = store.article;
 	if (!bootstrap.autoMarkArticle || !article || article.id !== store.selectedId || autoReadSelection === article.id) return;
@@ -692,14 +802,14 @@ async function navigateArticle(delta) {
 		if (!next) {
 			const selected = store.selectedId;
 			articleNavigationPaging = true; renderArticle();
-			const loaded = await (step > 0 ? store.nextPage() : store.previousPage());
+			const loaded = await (step > 0 ? loadMoreArticles() : store.previousPage());
 			if (epoch !== articleNavigationEpoch) {
 				if (loaded && !store.selectedId) navigation.replace(navigationSnapshot());
 				return;
 			}
 			articleNavigationPaging = false;
 			if (!loaded || store.selectedId !== selected) { articleNavigationQueue = 0; renderArticle(); return; }
-			next = step > 0 ? store.items[0] : store.items.at(-1);
+			next = step > 0 ? store.items[store.items.findIndex(item => item.id === selected) + 1] : store.items.at(-1);
 		}
 		if (next) openArticle(next.id);
 	}
@@ -713,6 +823,7 @@ function openArticle(id) {
 		$('close-article').focus({ preventScroll: true }); return;
 	}
 	navigationEpoch++;
+	restoringNavigation = false;
 	navigation.openArticle(id, navigationSnapshot());
 	store.open(id);
 	$('close-article').focus({ preventScroll: true });
@@ -748,14 +859,14 @@ $('feed-tree').addEventListener('click', event => {
 		const unread = Object.hasOwn(category.dataset, 'categoryUnread');
 		sidebar(false); chooseStream({
 			get: 'c_' + (unread ? category.dataset.categoryUnread : category.dataset.category),
-			filter: unread ? 'unread' : 'all',
+			filter: unread ? 'unread' : store.query.filter,
 			search: ''
 		});
 		return;
 	}
 	const button = event.target.closest('[data-feed]');
 	if (button) {
-		sidebar(false); chooseStream({ get: 'f_' + button.dataset.feed });
+		sidebar(false); chooseStream({ get: 'f_' + button.dataset.feed, filter: store.query.filter, search: '' });
 	}
 });
 $('feed-tree').addEventListener('keydown', event => {
@@ -773,7 +884,10 @@ $('feed-tree').addEventListener('keydown', event => {
 });
 document.querySelector('.primary-nav').addEventListener('click', event => {
 	const button = event.target.closest('[data-filter]');
-	if (button) { sidebar(false); chooseStream({ get: 'a', filter: button.dataset.filter }); }
+	if (button) { sidebar(false); chooseStream({ filter: button.dataset.filter }); }
+});
+$('all-subscriptions').addEventListener('click', () => {
+	sidebar(false); chooseStream({ get: 'a', filter: store.query.filter, search: '' });
 });
 function chooseStream(query) {
 	clearTimeout(searchTimer);
@@ -801,25 +915,43 @@ $('article-list').addEventListener('click', event => {
 	if (event.target.closest('[data-clear-search]')) { searchInput.value = ''; searchArticles(); searchInput.focus(); return; }
 	const button = event.target.closest('[data-id]'); if (button) openArticle(button.dataset.id);
 });
+$('article-list').addEventListener('pointerover', event => {
+	if (event.pointerType === 'mouse') preloader.hint(event.target.closest('[data-id]')?.dataset.id || null);
+});
+$('article-list').addEventListener('pointerleave', () => preloader.hint(null));
+$('article-list').addEventListener('focusin', event => preloader.hint(event.target.closest('[data-id]')?.dataset.id || null));
+let listScrollFrame = 0; let lastScrollTop = 0; let lastScrollTime = performance.now();
+$('article-list').addEventListener('scroll', () => {
+	if (listScrollFrame) return;
+	listScrollFrame = requestAnimationFrame(() => {
+		listScrollFrame = 0;
+		const time = performance.now(); const top = $('article-list').scrollTop;
+		const velocity = (top - lastScrollTop) / Math.max(1, time - lastScrollTime);
+		lastScrollTop = top; lastScrollTime = time;
+		$('previous-page').disabled = store.loading || top < 1;
+		measureList(true, velocity);
+	});
+}, { passive: true });
+for (const type of ['wheel', 'touchstart', 'pointerdown']) {
+	$('article-list').addEventListener(type, () => { followSelection = false; }, { passive: true });
+}
+new ResizeObserver(() => { measureList(); if (followSelection) centerSelection(); }).observe($('article-list'));
 $('article-list').addEventListener('keydown', event => {
 	if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-	const buttons = [...entryNodes.values()].map(node => node.button);
+	followSelection = false;
+	const buttons = store.items.map(item => entryNodes.get(item.id).button);
 	const index = buttons.indexOf(event.target.closest('[data-id]'));
 	const indexNext = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : index + (event.key === 'ArrowDown' ? 1 : -1);
 	const next = buttons[indexNext];
-	if (next) { event.preventDefault(); next.focus(); }
-});
-async function turnPage(next) {
-	const epoch = ++navigationEpoch;
-	cancelArticleNavigation();
-	if (await (next ? store.nextPage() : store.previousPage()) && epoch === navigationEpoch) {
-		restoreListScroll(0);
-		entryNodes.values().next().value?.button.focus({ preventScroll: true });
-		navigation.replace(navigationSnapshot());
+	if (next) { event.preventDefault(); next.focus(); } else if (event.key === 'ArrowDown' && store.next) {
+		event.preventDefault();
+		loadMoreArticles().then(loaded => { if (loaded) entryNodes.get(store.items[index + 1]?.id)?.button.focus(); });
 	}
-}
-$('previous-page').addEventListener('click', () => turnPage(false));
-$('next-page').addEventListener('click', () => turnPage(true));
+});
+$('previous-page').addEventListener('click', () => {
+	followSelection = false; $('article-list').scrollTo({ top: 0, behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+});
+$('next-page').addEventListener('click', () => loadMoreArticles());
 $('close-article').addEventListener('click', closeArticle);
 $('mark-page-read').addEventListener('click', () => {
 	store.batchState(store.items.filter(item => !item.read).map(item => item.id), 'read', true, bootstrap.apiLimits);
@@ -843,7 +975,7 @@ $('close-sidebar').addEventListener('click', () => sidebar(false));
 $('refresh').addEventListener('click', async () => {
 	const button = $('refresh');
 	button.disabled = true; button.setAttribute('aria-busy', 'true');
-	store.cache.clear();
+	store.clearContent();
 	try {
 		await Promise.all([queryList({}), store.feedsRefresh()]);
 	} catch (error) {
@@ -871,11 +1003,13 @@ document.querySelectorAll('[data-open-settings]').forEach(link => link.addEventL
 }));
 function showSettingsPage() {
 	settingsRoot.hidden = false; document.querySelector('.reader-shell').hidden = true;
+	preloader.suspend();
 	settingsPage.open(); syncFocusRegions();
 }
 function closeSettingsPage() {
 	settingsRoot.hidden = true; document.querySelector('.reader-shell').hidden = false;
 	settingsPage.close(); syncFocusRegions(); $('open-settings').focus({ preventScroll: true });
+	preloader.update();
 }
 function cancelSettings() {
 	const retainTool = settingsPage.toolDirty;
@@ -992,12 +1126,15 @@ document.addEventListener('keydown', event => {
 });
 media.addEventListener('change', () => { applyAppearance(current); syncThemeSettings(formValues()); });
 forcedColours.addEventListener('change', () => applyAppearance(current));
-mobile.addEventListener('change', () => { syncFocusRegions(); syncQuickLayout(); });
-document.addEventListener('visibilitychange', resetPolling);
+mobile.addEventListener('change', () => { syncFocusRegions(); syncQuickLayout(); centerSelection(); measureList(); });
+document.addEventListener('visibilitychange', () => { resetPolling(); preloader.update(); });
+navigator.connection?.addEventListener('change', () => preloader.update());
 window.addEventListener('online', () => { resetPolling(); render(); });
 window.addEventListener('offline', () => { resetPolling(); render(); });
 window.addEventListener('pagehide', () => {
 	pageActive = false; appearanceEpoch++; cancelArticleNavigation(); clearTimeout(refreshTimer); clearTimeout(searchTimer); store.dispose(); feedEditor.suspend();
+	preloader.suspend(); cancelAnimationFrame(centeringFrame); cancelAnimationFrame(listScrollFrame);
+	navigation.flushWrite(); navigation.cancelWrite();
 });
 window.addEventListener('pageshow', event => {
 	pageActive = true;

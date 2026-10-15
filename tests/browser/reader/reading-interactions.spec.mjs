@@ -276,10 +276,10 @@ test('category unread totals include every feed regardless of subscription searc
 	await page.locator('[data-category="10"]').click();
 	await expect.poll(() => requests.at(-1).get).toBe('c_10');
 	await page.locator('#next-page').click();
-	await expect(page.locator('.entry-card')).toHaveCount(1);
-	await expect(page.locator('.entry-card')).toHaveAttribute('data-id', '308');
+	await expect(page.locator('.entry-card')).toHaveCount(3);
+	await expect(page.locator('.entry-card').last()).toHaveAttribute('data-id', '308');
 	await expect(total).toHaveText('14');
-	await page.locator('.entry-card').click();
+	await page.locator('.entry-card').last().click();
 	await expect(page.locator('#article-frame')).toBeVisible();
 	await page.locator('#mark-read').click();
 	await expect(page.locator('#mark-read')).toHaveAttribute('aria-pressed', 'true');
@@ -437,9 +437,9 @@ test('single-page navigation keeps its fixed slots when every article becomes re
 	expect(listRequests).toBe(1);
 });
 
-test('multi-page results keep both navigation boundaries and allow moving forward and back', async ({ page, reader }) => {
-	const pages = [0, 1].map(index => [0, 1].map(offset => ({
-		id: String(100 - index * 2 - offset),
+test('continuous results retain entries and fixed footer controls while loading more and returning to the top', async ({ page, reader }) => {
+	const pages = [0, 1].map(index => Array.from({ length: 20 }, (_, offset) => ({
+		id: String(100 - index * 20 - offset),
 		title: `Page ${index + 1} article ${offset + 1}`,
 		feedId: 1,
 		date: 1791800000,
@@ -451,14 +451,17 @@ test('multi-page results keep both navigation boundaries and allow moving forwar
 		return route.fulfill({ json: { version: 1, items: pages[second ? 1 : 0], next: second ? null : '99' } });
 	});
 	await page.reload();
-	await expect(page.locator('.entry-card')).toHaveCount(2);
+	await expect(page.locator('.entry-card')).toHaveCount(20);
 	await expect(page.locator('#previous-page')).toBeVisible();
 	await expect(page.locator('#previous-page')).toBeDisabled();
 	await expect(page.locator('#next-page')).toBeVisible();
 	await expect(page.locator('#next-page')).toBeEnabled();
 	const positions = await fixedControlGeometry(page, ['previous-page', 'mark-page-read', 'next-page']);
 	await page.locator('#next-page').click();
-	await expect(page.locator('.entry-card').first()).toHaveAttribute('data-id', '98');
+	await expect(page.locator('.entry-card')).toHaveCount(40);
+	await expect(page.locator('.entry-card').first()).toHaveAttribute('data-id', '100');
+	await expect(page.locator('.entry-card').last()).toHaveAttribute('data-id', '61');
+	await page.locator('#article-list').evaluate(node => { node.scrollTop = node.scrollHeight; });
 	await expect(page.locator('#previous-page')).toBeVisible();
 	await expect(page.locator('#previous-page')).toBeEnabled();
 	await expect(page.locator('#next-page')).toBeVisible();
@@ -467,7 +470,8 @@ test('multi-page results keep both navigation boundaries and allow moving forwar
 	await page.locator('#previous-page').click();
 	await expect(page.locator('.entry-card').first()).toHaveAttribute('data-id', '100');
 	await expect(page.locator('#previous-page')).toBeDisabled();
-	await expect(page.locator('#next-page')).toBeEnabled();
+	await expect(page.locator('#next-page')).toBeDisabled();
+	await expect(page.locator('.entry-card')).toHaveCount(40);
 	await expectFixedControls(page, positions, 'first list page');
 	expect(reader.writes).toHaveLength(0);
 });
@@ -591,7 +595,7 @@ test('original articles open directly without a separate image action', async ({
 	expect(reader.writes).toHaveLength(0);
 });
 
-const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNQAAAABJRU5ErkJggg==', 'base64');
+const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=', 'base64');
 const imageContent = '<p>本地图片文章</p><img src="https://example.org/image.png" onerror="parent.document.body.dataset.intruded=1" alt="文章照片">' +
 	'<script src="https://example.org/tracker.js"></script><iframe src="https://example.org/embed"></iframe>' +
 	'<object data="https://example.org/object"></object><form><input></form><a href="javascript:alert(1)">unsafe</a>';

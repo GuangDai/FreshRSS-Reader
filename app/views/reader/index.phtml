@@ -59,7 +59,7 @@
 				<button type="button" data-filter="unread"><span class="reader-icon icon-unread" aria-hidden="true"></span><span data-i18n="unread"><?= $readerText('未读', 'Unread') ?></span><span id="total-unread" class="count"></span></button>
 				<button type="button" data-filter="starred"><span class="reader-icon icon-star" aria-hidden="true"></span><span data-i18n="starred"><?= $readerText('收藏', 'Starred') ?></span></button>
 			</nav>
-			<div class="subscriptions-heading"><span data-i18n="feeds"><?= $readerText('订阅', 'Subscriptions') ?></span><a href="./?view=settings&amp;section=subscriptions" data-open-settings="subscriptions" data-title="manageFeeds" data-i18n="manageFeeds"><?= $readerText('管理', 'Manage') ?></a></div>
+			<div class="subscriptions-heading"><button type="button" id="all-subscriptions" data-i18n="allSubscriptions"><?= $readerText('全部订阅', 'All subscriptions') ?></button><a href="./?view=settings&amp;section=subscriptions" data-open-settings="subscriptions" data-title="manageFeeds" data-i18n="manageFeeds"><?= $readerText('管理', 'Manage') ?></a></div>
 			<input type="search" id="feed-search" data-placeholder="feedSearch" aria-label="<?= $readerText('筛选订阅', 'Filter subscriptions') ?>" placeholder="<?= $readerText('筛选订阅', 'Filter subscriptions') ?>" autocomplete="off" />
 			<nav id="feed-tree" class="feed-tree" aria-label="Subscriptions"></nav>
 		</aside>
@@ -80,9 +80,9 @@
 			<div class="reading-workspace">
 				<section class="article-list-pane" aria-label="Articles">
 					<div class="article-list" id="article-list" aria-busy="false" tabindex="-1"></div>
-					<div class="pagination"><button type="button" id="previous-page" data-i18n="previous"><?= $readerText('上一页', 'Previous page') ?></button>
+					<div class="pagination"><button type="button" id="previous-page" data-i18n="backToTop"><?= $readerText('回到顶部', 'Back to top') ?></button>
 						<button type="button" id="mark-page-read" data-i18n="markPageReadShort" data-title="markPageRead"><?= $readerText('标为已读', 'Mark read') ?></button>
-						<button type="button" id="next-page" data-i18n="next"><?= $readerText('下一页', 'Next page') ?></button></div>
+						<button type="button" id="next-page"><?= $readerText('加载更多', 'Load more') ?></button></div>
 				</section>
 				<section class="article-pane" id="article-pane" aria-label="Article">
 					<div class="article-empty" id="article-empty"><p data-i18n="choose"><?= $readerText('选择一篇文章开始阅读', 'Choose an article to start reading') ?></p><small data-i18n="keyboard"><?= $readerText('焦点在阅读器控件时：J / K 切换文章 · M 已读 · S 收藏', 'With focus in the reader controls: J / K next / previous · M read · S star') ?></small></div>

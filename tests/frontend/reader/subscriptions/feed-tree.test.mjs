@@ -142,7 +142,7 @@ test('category unread totals match category-visible priorities and retain paused
 	].map((feed, index) => ({ id: index + 1, name: 'Feed ' + index, categoryId: 1, error: false, ...feed }));
 	tree.update(feeds, [{ id: 1, name: 'Reading' }], 1);
 	assert.equal(tree.groups.get(1).unread, 26); assert.equal(tree.groups.get(1).count.textContent, '26');
-	assert.equal(tree.unread, 146, 'The existing global unread calculation remains unchanged.');
+	assert.equal(tree.unread, 23, 'The global unread count matches the main stream priorities.');
 	tree.filter('Feed 0'); assert.equal(tree.groups.get(1).unread, 26);
 });
 

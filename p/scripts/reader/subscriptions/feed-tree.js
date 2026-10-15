@@ -39,7 +39,7 @@ export class FeedTree {
 		this.unread = 0;
 		this.orderedIds = [];
 		for (const feed of feeds) {
-			this.unread += feed.unread;
+			if ((feed.priority ?? 10) >= 10) this.unread += feed.unread;
 			if (!byCategory.has(feed.categoryId)) byCategory.set(feed.categoryId, []);
 			byCategory.get(feed.categoryId).push(feed);
 		}
