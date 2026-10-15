@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseAppearance } from '../helpers/appearance.mjs';
 
 const username = process.env.FRESHRSS_TEST_USER;
 const password = process.env.FRESHRSS_TEST_PASSWORD;
@@ -83,12 +84,12 @@ test('a stale preference response must not close a reopened settings draft', asy
 		await route.fulfill({ json: { version: 1, preferences } });
 	};
 	await page.locator('#open-settings').click();
-	await page.locator('input[type=radio][name=theme][value="dark"]').check();
+	await chooseAppearance(page, 'theme', 'dark');
 	await page.locator('#save-reader-settings').click();
 	await started.promise;
 	await page.locator('#cancel-settings').click();
 	await page.locator('#open-settings').click();
-	await page.locator('input[type=radio][name=theme][value="light"]').check();
+	await chooseAppearance(page, 'theme', 'light');
 	const response = page.waitForResponse(response => new URL(response.url()).searchParams.get('a') === 'preferences');
 	pending.resolve();
 	await response;
@@ -113,7 +114,7 @@ for (const change of ['edit', 'reopen']) {
 			});
 		};
 		await page.locator('#open-settings').click();
-		await page.locator('input[type=radio][name=theme][value="dracula"]').check();
+		await chooseAppearance(page, 'theme', 'dracula');
 		const sections = page.locator('#settings-section-select');
 		if (await sections.isVisible()) await sections.selectOption('advanced');
 		else await page.locator('[data-settings-section=advanced]').click();
@@ -127,7 +128,7 @@ for (const change of ['edit', 'reopen']) {
 		}
 		if (await sections.isVisible()) await sections.selectOption('appearance');
 		else await page.locator('[data-settings-section=appearance]').click();
-		await page.locator('input[type=radio][name=theme][value="nord"]').check();
+		await chooseAppearance(page, 'theme', 'nord');
 		const response = page.waitForResponse(response => new URL(response.url()).searchParams.get('a') === 'limits');
 		pending.resolve(); await response;
 		await expect(page.locator('#save-server-limits')).toBeEnabled();
@@ -145,7 +146,7 @@ test('a failed preference save keeps the local appearance draft without changing
 	const originalTheme = await page.locator('body').getAttribute('data-theme');
 	handlers.preferences = route => route.fulfill({ status: 500, json: { version: 1, error: 'write_failed' } });
 	await page.locator('#open-settings').click();
-	await page.locator('input[type=radio][name=theme][value="dracula"]').check();
+	await chooseAppearance(page, 'theme', 'dracula');
 	await page.locator('#save-reader-settings').click();
 	await expect(page.locator('#save-reader-settings')).toBeEnabled();
 	await expect(page.locator('#settings-status')).toBeVisible();
@@ -248,7 +249,7 @@ test('simulated page lifecycle releases pending content and ignores an interrupt
 	await expect(page.locator('#article-frame')).toBeVisible();
 	// Keep the article in the background when phone reading covers the main toolbar.
 	await page.locator('#open-settings').dispatchEvent('click');
-	await page.locator('input[type=radio][name=theme][value="dark"]').check();
+	await chooseAppearance(page, 'theme', 'dark');
 	await page.locator('#save-reader-settings').click();
 	await started.promise;
 	await page.evaluate(() => window.dispatchEvent(new window.PageTransitionEvent('pagehide', { persisted: true })));

@@ -112,6 +112,7 @@ final class FreshRSS_reader_Controller extends FreshRSS_ActionController {
 			}
 		}
 		$schema = Preferences::schema(FreshRSS_Context::systemConf()->reader);
+		$this->view->readerAppearance = Preferences::preferences(FreshRSS_Context::userConf()->reader_preferences, $schema);
 		$this->view->readerBootstrap = [
 			'initialQuery' => $initialQuery,
 			'readOnly' => $this->readOnly,
@@ -124,7 +125,7 @@ final class FreshRSS_reader_Controller extends FreshRSS_ActionController {
 			'autoMarkArticle' => !$this->readOnly && (bool)(FreshRSS_Context::userConf()->mark_when['article'] ?? false),
 			'autoMarkSite' => !$this->readOnly && (bool)(FreshRSS_Context::userConf()->mark_when['site'] ?? false),
 			'adjustments' => Preferences::preferenceErrors(FreshRSS_Context::userConf()->reader_preferences, $schema),
-			'preferences' => Preferences::preferences(FreshRSS_Context::userConf()->reader_preferences, $schema),
+			'preferences' => $this->view->readerAppearance,
 			'schema' => $schema,
 			'limits' => FreshRSS_Context::systemConf()->reader,
 		];

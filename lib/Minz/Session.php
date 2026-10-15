@@ -256,6 +256,8 @@ class Minz_Session {
 				}
 			}
 		}
+		// Older installations used a trailing-slash Path, which otherwise shadows the replacement session cookie.
+		self::deleteLegacyCookie($name);
 		if (!setcookie($name, $newId, $params)) {
 			throw new RuntimeException('Failed to set session cookie!');
 		}

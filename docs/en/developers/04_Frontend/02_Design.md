@@ -1,41 +1,38 @@
-# Writing a new theme
+# Reading appearance
 
-**Note: Currently personal themes are not officially supported and may be overwritten when updating. Be sure to keep backups!**
+The home page uses one reading interface with 32 built-in palettes derived from MetaCubeXD’s daisyUI configuration. Themes are application preferences, not separately installed skins. The former skin directories and their registration files are not used. Adding a directory under `p/themes/` does not add a selectable reading theme.
 
-**As of writing (02-02-2021), support for themes as extensions is under development.**
+## Source files
 
-The easiest way to create a theme is by copying and modifying the base theme (or another of the pre-installed themes). The base theme can be found in [/p/themes/base-theme](https://github.com/FreshRSS/FreshRSS/tree/edge/p/themes/base-theme). Each Theme requires:
+- `app/Services/Reader/Preferences.php` defines valid themes, defaults and preference validation.
+- `p/scripts/reader/appearance/themes.js` and `p/styles/reader/themes.css` contain the 32 palettes and their original configuration values.
+- `p/scripts/reader/appearance/colours.js` derives readable interface text colours for the selected backgrounds.
+- `p/scripts/reader/appearance/choices.js` implements the visual choices and local preview.
+- `p/scripts/reader/articles/document.js` applies typography and colours to isolated article documents.
+- `p/styles/vendor/daisyui-LICENSE` contains the licence for the copied theme configuration.
 
-- a `metadata.json` file to describe the theme
-- an (optional) `icons` folder containing .svg (for icons), .ico (for favicons), and .png (for special cases) files to override existing icons
-- a `thumbs` folder containing a file, `original.png` that will be used as the preview for the theme
+Keep palette values consistent between JavaScript, CSS and the fixed upstream snapshot in `tests/fixtures/themes/`. The application does not require a daisyUI or Tailwind runtime. Preserve the original palette values when adjusting contrast; the interface derives readable text colours separately.
 
-`_frss.css` is normally added to the `metadata.json` file as a fallback for missing aspects or as basement. The file is taken from the base theme.
+## Selection and preview
 
-## RTL Support
+Theme, daytime-theme and night-time-theme selectors initially show only the current choice. Opening the selector displays up to six choices per page, with brightness filters and search by name or palette description. Create miniature previews only for visible choices. Filtering, searching and pagination must not change the selected draft.
 
-RTL (right-to-left) support for languages such as Hebrew and Arabic is handled through CSSJanus. To generate an RTL CSS file from your standard file, use `make rtl`. Be sure to commit the resulting file (filename.rtl.css).
+Layout, density and reading style have two or three visual choices displayed directly. A choice updates the local preview; the saved reading interface changes only after **Save settings** succeeds. The expanded preview shows subscriptions, article list and article body; on a phone, users switch between these areas. Preserve unsaved drafts when saving fails and keep the open article and reading position intact.
 
-## Overriding icons
+Article bodies remain isolated in an iframe without script execution or same-origin access. Appearance changes must preserve that boundary. Use logical CSS properties for direction-sensitive layout and test both left-to-right and right-to-left interfaces.
 
-To replace the default icons, add an `icons` folder to your theme’s folder. Use files with the same name as the default icon to override them.
+## Management and installation pages
 
-## Template file
+`p/themes/base-theme/` provides the fixed base styles for management and installation pages. The loader uses this base directly, regardless of an account’s former skin preference. Shared icons and fonts remain under `p/themes/`; reading and settings styles are under `p/styles/reader/`.
 
-`metadata.json`
+Generate the base styles’ RTL counterparts with `npm run rtlcss` when changing those files. Reading styles use direction-aware rules rather than separate skin registrations.
 
-```json
-{
-	"name": "Theme name",
-	"author": "Theme author",
-	"description": "Theme description",
-	"version": 0.1,
-	"files": ["_frss.css", "file1.css", "file2.css"]
-}
+## Checks
+
+```sh
+npm run test:frontend
+npm run test:browser:appearance
+npm run test:browser:reading
 ```
 
-An example of a CSS theme file can be found at [/p/themes/base-theme/base.css](https://github.com/FreshRSS/FreshRSS/blob/edge/p/themes/base-theme/base.css)
-
-## Installation
-
-see [](../../admins/11_Themes.md)
+The focused appearance and reading fixtures render application templates and use local test responses; they do not require an installed account. See the [test guide](../../../../tests/README.md) for PHP and browser prerequisites, and the [user configuration guide](../../users/05_Configuration.md#display) for the settings workflow.

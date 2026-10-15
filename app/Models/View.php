@@ -7,12 +7,6 @@ declare(strict_types=1);
 class FreshRSS_View extends Minz_View {
 
 	// Main views
-	/** @var callable */
-	public $callbackBeforeEntries;
-	/** @var callable|null */
-	public $callbackBeforeFeeds;
-	/** @var callable */
-	public $callbackBeforePagination;
 	/** @var array<int,FreshRSS_Category> where the key is the category ID */
 	public array $categories;
 	public ?FreshRSS_Category $category = null;
@@ -24,12 +18,6 @@ class FreshRSS_View extends Minz_View {
 	public ?FreshRSS_Feed $feed = null;
 	/** @var array<int,FreshRSS_Feed> where the key is the feed ID */
 	public array $feeds;
-	/**
-	 * The keys are the feed IDs that have entries matching the current state and search filters (global view).
-	 * @var array<int,int>|null
-	 */
-	public ?array $feedIdsMatching = null;
-	public int $nbUnreadTags;
 	/** @var array<int,FreshRSS_Tag> where the key is the label ID */
 	public array $tags;
 	/** @var list<array{id:int,name:string,checked:bool}> */
@@ -139,6 +127,8 @@ class FreshRSS_View extends Minz_View {
 
 	/** @var array<string,mixed> */
 	public array $readerBootstrap = [];
+	/** @var array<string,string|int|bool> */
+	public array $readerAppearance = [];
 	public string $readerScriptNonce = '';
 	/** @var array{imports:array<string,string>} */
 	public array $readerModuleAssets = ['imports' => []];
@@ -163,7 +153,4 @@ class FreshRSS_View extends Minz_View {
 	/** @var array<string,string> */
 	public array $message;
 
-	// View modes
-	/** @var array<FreshRSS_ViewMode> */
-	public array $viewModes;
 }

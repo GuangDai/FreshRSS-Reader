@@ -7,7 +7,7 @@
 1. 后端采用 `FreshRSS\` 命名空间，与 `app/` 下的相对路径对应。服务放入 `Services/{领域}/`，数据库对象放入 `Models/{领域}/`，队列存储和进程锁放入 `Infrastructure/`，异常放入 `Exceptions/{领域}/`。仅处理格式、协议或选择器转换的工具保留在 `Utils/`。
 2. 将规则样本独立为一个类文件；将阅读偏好与文章输出、API 响应与 API 契约分开，消除隐藏的加载先后依赖和混合职责。
 3. Reader 前端按 `core/`、`articles/`、`subscriptions/`、`appearance/`、`settings/`、`embed/` 分组，入口保留 `app.js`。Reader 样式统一放入 `p/styles/reader/`。
-4. PHP 测试对应后端目录；前端与浏览器测试区分 Reader、经典界面和扩展。浏览器配置、公共 fixture 和辅助工具独立放置；集成测试按 `refresh/`、`database/`、`api/` 分组。
+4. PHP 测试对应后端目录；前端与浏览器测试区分阅读主页、管理表单和扩展。浏览器配置、公共 fixture 和辅助工具独立放置；集成测试按 `refresh/`、`database/`、`api/` 分组。
 5. 本地部署配置使用 `Docker/development/`，中文开发文档集中在 `docs/zh-CN/development/`。同步开发命令、CI 和所有受版本管理的路径引用。
 
 目录迁移保持现有路由、配置键、数据库字段、扩展标识、Compose 项目名和数据卷名。现有工作区改动继续保留，不覆盖已有功能。
@@ -34,7 +34,7 @@ app/
 ├── Exceptions/{Reader,Rules}/   # 对应领域的异常
 ├── Utils/{Http,Html}/           # 协议输入、嵌入策略与选择器转换
 ├── views/                       # 沿用控制器对应的模板目录
-├── layout/                      # 经典界面公共布局
+├── layout/                      # 认证和管理表单的公共布局
 └── i18n/                        # 翻译
 
 p/
@@ -45,15 +45,15 @@ p/
 │   ├── subscriptions/           # 订阅树、选择、批次与编辑器
 │   ├── appearance/              # 主题与颜色对比
 │   ├── settings/                # 设置分类、账户、备份与配置
-│   └── embed/                   # 经典设置表单的嵌入脚本
+│   └── embed/                   # 管理表单的嵌入脚本
 ├── styles/reader/               # reader.css、themes.css 与设置样式
-└── themes/                      # 沿用主题注册和资源目录
+└── themes/                      # 管理表单的基础样式和共用图标
 
 tests/
 ├── app/                         # 对应 app/ 的 PHP 测试
 ├── lib/                         # 框架与核心扩展测试
 ├── cli/                         # CLI 解析与配置测试
-├── frontend/{reader,classic}/   # Node 模块和经典脚本测试
+├── frontend/{reader,classic}/   # 阅读模块和共用管理脚本的 Node 测试
 ├── fixtures/themes/             # 共用的固定主题数据
 ├── browser/                     # 按页面领域组织的 Playwright 用例
 └── integration/{refresh,database,api}/
@@ -75,7 +75,7 @@ Reader 的 `Preferences` 只定义和校验阅读偏好；`EntryPresenter` 处�
 
 新增 PHP 类通过 [`lib/lib_rss.php`](../../../lib/lib_rss.php) 的自动加载器解析，`FreshRSS\Services\Reader\SettingsService` 对应 `app/Services/Reader/SettingsService.php`。调用方使用 `use` 导入类，无需直接加载服务文件。独立 CLI 和测试子进程先加载常量及自动加载入口。
 
-Reader 继续使用浏览器原生 ES module。`app.js` 组装功能模块，模块之间使用明确的相对导入。嵌入脚本保留原有 `defer` 执行方式；样式相对于自身位置引用主题图标。公共 URL、文件修改时间和测试中的静态资源引用须随文件移动一起修改。
+阅读主页使用浏览器原生 ES module。`app.js` 组装功能模块，模块之间使用明确的相对导入。嵌入脚本保留原有 `defer` 执行方式；样式相对于自身位置引用共用图标。`tests/frontend/classic/` 和 `tests/browser/classic/panels.spec.mjs` 保留共用管理脚本及订阅面板的回归，目录名不代表另有经典阅读界面。公共 URL、文件修改时间和测试中的静态资源引用须随文件移动一起修改。
 
 ## 命名规则
 

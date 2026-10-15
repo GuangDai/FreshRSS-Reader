@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/reader.fixture.mjs';
+import { chooseAppearance } from '../helpers/appearance.mjs';
 import { writeFile } from 'node:fs/promises';
 
 async function openSettings(page) {
@@ -426,13 +427,13 @@ test('unchanged settings need no save and reverting a draft disables saving agai
 	for (const id of ['export-settings', 'import-settings', 'reset-settings']) await expect(page.locator('#' + id)).toBeHidden();
 	const originalTheme = reader.preferences.theme;
 	const changedTheme = originalTheme === 'dark' ? 'nord' : 'dark';
-	await page.locator(`input[type=radio][name=theme][value="${changedTheme}"]`).check();
+	await chooseAppearance(page, 'theme', changedTheme);
 	await expect(save).toBeEnabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
-	await page.locator(`input[type=radio][name=theme][value="${originalTheme}"]`).check();
+	await chooseAppearance(page, 'theme', originalTheme);
 	await expect(save).toBeDisabled();
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
-	await page.locator(`input[type=radio][name=theme][value="${changedTheme}"]`).check();
+	await chooseAppearance(page, 'theme', changedTheme);
 	await save.click();
 	await expect(page.locator('#settings-page')).toBeVisible();
 	await expect(save).toBeDisabled();

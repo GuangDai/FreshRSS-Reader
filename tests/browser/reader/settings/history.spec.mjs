@@ -1,4 +1,5 @@
 import { test as liveTest, expect } from '@playwright/test';
+import { chooseAppearance } from '../../helpers/appearance.mjs';
 import { test as fixtureTest } from '../../fixtures/reader.fixture.mjs';
 import { THEME_NAMES } from '../../../../p/scripts/reader/appearance/themes.js';
 import { writeFile } from 'node:fs/promises';
@@ -53,7 +54,7 @@ fixtureTest('rapid settings saves and article opens retain the latest article th
 		for (const theme of THEME_NAMES) {
 			await page.locator('#open-settings').click();
 			await expect(page.locator('#settings-page')).toBeVisible();
-			await page.locator(`input[type=radio][name=theme][value="${theme}"]`).check();
+			await chooseAppearance(page, 'theme', theme);
 			await page.locator('#save-reader-settings').click();
 			await expect(page.locator('#save-reader-settings')).toBeDisabled();
 			await page.locator('#cancel-settings').click();

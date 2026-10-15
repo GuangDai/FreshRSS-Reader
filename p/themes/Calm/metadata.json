@@ -1,8 +1,0 @@
-{
-	"name": "Calm",
-	"author": "FreshRSS contributors",
-	"description": "Quiet reading layout with system fonts, clear focus states and an automatic dark palette.",
-	"version": "1.0.0",
-	"files": ["_frss.css", "../Origine/origine.css", "calm.css"],
-	"theme-color": {"light": "#f6f7f4", "dark": "#171c1a"}
-}

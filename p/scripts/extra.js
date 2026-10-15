@@ -1,6 +1,6 @@
 // @license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-3.0
 'use strict';
-/* globals context, notifs_html5_is_supported, openNotification, xmlHttpRequestJson */
+/* globals context, openNotification, xmlHttpRequestJson */
 
 // <crypto form (Web login)>
 function poormanSalt() {	// If crypto.getRandomValues is not available
@@ -10,10 +10,6 @@ function poormanSalt() {	// If crypto.getRandomValues is not available
 		text += base.charAt(Math.floor(Math.random() * 64));
 	}
 	return text;
-}
-
-function forgetOpenCategories() {
-	localStorage.removeItem('FreshRSS_open_categories');
 }
 
 function init_crypto_forms() {
@@ -100,18 +96,6 @@ function init_crypto_forms() {
 // </crypto form (Web login)>
 
 // <show password>
-
-function init_display(parent) {
-	const theme = parent.querySelector('select#theme');
-	if (!theme) {
-		return;
-	}
-	theme.addEventListener('change', (e) => {
-		const picked = parent.querySelector('.preview-container.picked');
-		picked.classList.remove('picked');
-		parent.querySelector(`[data-theme-preview="${e.target.value}"]`).classList.add('picked');
-	});
-}
 
 function togglePW(btn) {
 	if (btn.classList.contains('active')) {
@@ -724,35 +708,6 @@ function init_user_stats() {
 	document.querySelectorAll('tr[data-need-ajax]').forEach(row => observer.observe(row));
 }
 
-function init_enable_notify_button() {
-	const notify_button = document.getElementById('html5_enable_notif');
-	if (!notify_button) return;
-	// it means unsupported in browser
-	if (!notifs_html5_is_supported()) {
-		notify_button.checked = false;
-		return;
-	}
-
-	// Not granted, uncheck even if it is saved in server so browser asks for permission
-	if (Notification.permission !== 'granted') {
-		notify_button.checked = false;
-	}
-
-	notify_button.addEventListener('change', async function () {
-		if (this.checked) {
-			const permission = await Notification.requestPermission();
-			context.notifs_html5_permission = permission;
-			// Uncheck if user denied
-			if (permission !== 'granted') {
-				notify_button.checked = false;
-			}
-		} else {
-			// User disabled notifications
-			context.notifs_html5_permission = 'denied';
-		}
-	});
-}
-
 function init_extra_afterDOM() {
 	if (!window.context) {
 		if (window.console) {
@@ -760,10 +715,6 @@ function init_extra_afterDOM() {
 		}
 		setTimeout(init_extra_afterDOM, 50);
 		return;
-	}
-	const loginButton = document.querySelector('#loginButton');
-	if (loginButton) {
-		loginButton.addEventListener('click', forgetOpenCategories);
 	}
 	init_crypto_forms();
 	init_password_observers(document.body);
@@ -773,7 +724,6 @@ function init_extra_afterDOM() {
 	init_update_feed();
 	init_details_attributes();
 	init_user_stats();
-	init_enable_notify_button();
 
 	data_auto_leave_validation(document.body);
 
@@ -786,7 +736,6 @@ function init_extra_afterDOM() {
 		init_archiving(slider);
 		init_url_observers(slider);
 	} else {
-		init_display(document.body);
 		init_archiving(document.body);
 		init_url_observers(document.body);
 	}

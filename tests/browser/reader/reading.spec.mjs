@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseAppearance } from '../helpers/appearance.mjs';
 import { readFile } from 'node:fs/promises';
 
 const username = process.env.FRESHRSS_TEST_USER;
@@ -44,7 +45,7 @@ test('layout changes reuse the current list and numeric preferences persist', as
 	await expect(page.locator('body')).toHaveAttribute('data-layout', 'cards');
 	expect(listRequests).toBe(0);
 	await page.locator('#open-settings').click();
-	await page.locator('input[type=radio][name=theme][value="dark"]').check();
+	await chooseAppearance(page, 'theme', 'dark');
 	await selectSection(page, 'reading');
 	await page.locator('[name=pageSize]').fill('25');
 	await selectSection(page, 'storage');
@@ -168,7 +169,7 @@ test('export validates numeric drafts before producing a reusable settings file'
 	expect(downloads).toHaveLength(0);
 	await cache.fill('0');
 	await selectSection(page, 'appearance');
-	await page.locator('input[type=radio][name=theme][value="nord"]').check();
+	await chooseAppearance(page, 'theme', 'nord');
 	await selectSection(page, 'data');
 	const downloaded = page.waitForEvent('download');
 	await page.locator('#export-settings').click();

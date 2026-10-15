@@ -30,10 +30,6 @@
 		$dir = ' dir="rtl"';
 		$class[] = 'rtl';
 	}
-	$class[] = 'theme_' . FreshRSS_Context::userConf()->theme;
-	if (FreshRSS_Context::userConf()->darkMode !== 'no') {
-		$class[] = 'darkMode_' . FreshRSS_Context::userConf()->darkMode;
-	}
 	if (FreshRSS_Auth::hasAccess()) {
 		$class[] = 'logged_in';
 	}
@@ -133,9 +129,6 @@
 <div id="global">
 	<?php
 		flush();
-		if (isset($this->callbackBeforeFeeds)) {
-			call_user_func($this->callbackBeforeFeeds, $this);
-		}
 		$this->render();
 	?>
 </div>

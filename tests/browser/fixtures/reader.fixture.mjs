@@ -11,7 +11,7 @@ const publicRoot = resolve(root, 'p');
 const mimeTypes = { '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
 
 // Execute the real PHP schema and shell without loading accounts, databases or sessions.
-function renderShell() {
+export function renderShell(language = 'zh-CN') {
 	let php = process.env.FRESHRSS_TEST_PHP || 'php';
 	if (!process.env.FRESHRSS_TEST_PHP) {
 		try { execFileSync(php, ['-v'], { stdio: 'ignore' }); } catch {
@@ -20,6 +20,7 @@ function renderShell() {
 	}
 	const source = `
 require 'tests/bootstrap.php';
+define('READER_FIXTURE_LANGUAGE', base64_decode('${Buffer.from(language).toString('base64')}'));
 function _t(string $key): string { return $key === 'gen.dir' ? 'ltr' : $key; }
 final class FreshRSS_Entry { public const STATE_NOT_READ = 2; }
 final class FreshRSS_DatabaseDAO { public const LENGTH_INDEX_UNICODE = 191; }
@@ -37,10 +38,11 @@ final class FreshRSS_UserConfiguration {
 	public function toArray(): array { return $this->values; }
 }
 final class FreshRSS_Context {
-	public static function userConf(): object { return (object)['language' => 'zh-CN']; }
+	public static function userConf(): object { return (object)['language' => READER_FIXTURE_LANGUAGE]; }
 }
 final class FreshRSS_View {
 	public array $readerBootstrap;
+	public array $readerAppearance;
 	public string $readerScriptNonce;
 	public array $readerModuleAssets;
 	public function render(): void { include 'app/views/reader/index.phtml'; }
@@ -54,7 +56,7 @@ $accountDefaults['mark_when']['article'] = false;
 $accountDefaults['mark_when']['site'] = false;
 $account = FreshRSS\\Services\\Reader\\SettingsService::describe(new FreshRSS_UserConfiguration($accountDefaults));
 $bootstrap = [
-	'schema' => $schema, 'preferences' => $preferences, 'csrf' => 'local-design-fixture', 'language' => 'zh-CN',
+	'schema' => $schema, 'preferences' => $preferences, 'csrf' => 'local-design-fixture', 'language' => READER_FIXTURE_LANGUAGE,
 	'canManageLimits' => false, 'adjustments' => [],
 	'limits' => ['max_search_chars' => 1000, 'max_settings_bytes' => 16384],
 	'apiLimits' => ['maxBatchItems' => 100, 'maxRequestBytes' => 65536],
@@ -62,6 +64,7 @@ $bootstrap = [
 ];
 $view = new FreshRSS_View();
 $view->readerBootstrap = $bootstrap;
+$view->readerAppearance = $preferences;
 $view->readerScriptNonce = bin2hex(random_bytes(16));
 $view->readerModuleAssets = FreshRSS\\Services\\Reader\\ModuleAssets::importMap();
 $csp = "default-src 'self'; script-src 'self' 'nonce-" . $view->readerScriptNonce . "'; style-src 'self' 'unsafe-inline'; "

@@ -2,9 +2,20 @@
 	declare(strict_types=1);
 	/** @var FreshRSS_View $this */
 	$language = FreshRSS_Context::userConf()->language;
+	$isChinese = str_starts_with(strtolower($language), 'zh');
+	$readerText = static fn(string $chinese, string $english): string => htmlspecialchars($isChinese ? $chinese : $english, ENT_QUOTES, 'UTF-8');
+	$appearance = $this->readerAppearance;
+	$initialTheme = $appearance['theme'] === 'auto' ? $appearance['lightTheme'] : $appearance['theme'];
+	$initialStyles = [];
+	foreach (['sidebarWidth' => '--sidebar-width', 'listWidth' => '--list-width', 'readingWidth' => '--reading-width',
+		'fontSize' => '--reader-font-size'] as $key => $property) {
+		$initialStyles[] = $property . ':' . (int)$appearance[$key] . 'px';
+	}
+	$initialStyles[] = '--reader-line-height:' . ((int)$appearance['lineHeight'] / 100);
 ?>
 <!doctype html>
-<html lang="<?= htmlspecialchars($language, ENT_QUOTES, 'UTF-8') ?>" dir="<?= _t('gen.dir') === 'rtl' ? 'rtl' : 'ltr' ?>">
+<html lang="<?= htmlspecialchars($language, ENT_QUOTES, 'UTF-8') ?>" dir="<?= _t('gen.dir') === 'rtl' ? 'rtl' : 'ltr' ?>"
+	style="<?= htmlspecialchars(implode(';', $initialStyles), ENT_QUOTES, 'UTF-8') ?>">
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -16,47 +27,65 @@
 	<link rel="stylesheet" href="../styles/reader/settings.css?<?= @filemtime(PUBLIC_PATH . '/styles/reader/settings.css') ?>" />
 	<script type="importmap" nonce="<?= htmlspecialchars($this->readerScriptNonce, ENT_QUOTES, 'UTF-8') ?>"><?= json_encode(
 		$this->readerModuleAssets, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) ?></script>
+	<?php foreach ($this->readerModuleAssets['imports'] as $module => $url) {
+		if ($module === '../scripts/reader/app.js' || str_starts_with($module, '../scripts/reader/embed/')) {
+			continue;
+		} ?>
+	<link rel="modulepreload" href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>" />
+	<?php } ?>
 	<script type="module" src="<?= htmlspecialchars($this->readerModuleAssets['imports']['../scripts/reader/app.js'], ENT_QUOTES, 'UTF-8') ?>"></script>
 </head>
-<body data-layout="split" data-theme="sunset" data-style="calm" data-density="comfortable">
+<body data-layout="<?= htmlspecialchars((string)$appearance['layout'], ENT_QUOTES, 'UTF-8') ?>"
+	data-theme="<?= htmlspecialchars((string)$initialTheme, ENT_QUOTES, 'UTF-8') ?>"
+	data-style="<?= htmlspecialchars((string)$appearance['style'], ENT_QUOTES, 'UTF-8') ?>"
+	data-density="<?= htmlspecialchars((string)$appearance['density'], ENT_QUOTES, 'UTF-8') ?>">
 	<script type="application/json" id="reader-bootstrap"><?= json_encode($this->readerBootstrap,
 		JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
-	<a class="skip-link" href="#article-list" data-i18n="skipToArticles">跳到文章列表</a>
+	<script nonce="<?= htmlspecialchars($this->readerScriptNonce, ENT_QUOTES, 'UTF-8') ?>">
+		// Resolve the saved system theme before any reading content can paint.
+		{
+			const appearance = JSON.parse(document.getElementById('reader-bootstrap').textContent).preferences;
+			if (appearance.theme === 'auto') {
+				document.body.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? appearance.darkTheme : appearance.lightTheme;
+			}
+		}
+	</script>
+	<a class="skip-link" href="#article-list" data-i18n="skipToArticles"><?= $readerText('跳到文章列表', 'Skip to articles') ?></a>
 	<div class="reader-shell">
 		<aside class="sidebar" id="reader-sidebar">
 			<a class="brand" href="./"><span class="brand-mark reader-icon icon-rss" aria-hidden="true"></span> FreshRSS</a>
-			<nav class="primary-nav" data-title="readingNavigation" aria-label="阅读导航">
-				<button type="button" data-filter="all"><span class="reader-icon icon-all" aria-hidden="true"></span><span data-i18n="all">全部文章</span></button>
-				<button type="button" data-filter="unread"><span class="reader-icon icon-unread" aria-hidden="true"></span><span data-i18n="unread">未读</span><span id="total-unread" class="count"></span></button>
-				<button type="button" data-filter="starred"><span class="reader-icon icon-star" aria-hidden="true"></span><span data-i18n="starred">收藏</span></button>
+			<nav class="primary-nav" data-title="readingNavigation" aria-label="<?= $readerText('阅读导航', 'Reading navigation') ?>">
+				<button type="button" data-filter="all"><span class="reader-icon icon-all" aria-hidden="true"></span><span data-i18n="all"><?= $readerText('全部文章', 'All articles') ?></span></button>
+				<button type="button" data-filter="unread"><span class="reader-icon icon-unread" aria-hidden="true"></span><span data-i18n="unread"><?= $readerText('未读', 'Unread') ?></span><span id="total-unread" class="count"></span></button>
+				<button type="button" data-filter="starred"><span class="reader-icon icon-star" aria-hidden="true"></span><span data-i18n="starred"><?= $readerText('收藏', 'Starred') ?></span></button>
 			</nav>
-			<div class="subscriptions-heading"><span data-i18n="feeds">订阅</span><a href="./?view=settings&amp;section=subscriptions" data-open-settings="subscriptions" data-title="manageFeeds" data-i18n="manageFeeds">管理</a></div>
-			<input type="search" id="feed-search" data-placeholder="feedSearch" aria-label="筛选订阅" autocomplete="off" />
+			<div class="subscriptions-heading"><span data-i18n="feeds"><?= $readerText('订阅', 'Subscriptions') ?></span><a href="./?view=settings&amp;section=subscriptions" data-open-settings="subscriptions" data-title="manageFeeds" data-i18n="manageFeeds"><?= $readerText('管理', 'Manage') ?></a></div>
+			<input type="search" id="feed-search" data-placeholder="feedSearch" aria-label="<?= $readerText('筛选订阅', 'Filter subscriptions') ?>" placeholder="<?= $readerText('筛选订阅', 'Filter subscriptions') ?>" autocomplete="off" />
 			<nav id="feed-tree" class="feed-tree" aria-label="Subscriptions"></nav>
 		</aside>
-		<button type="button" class="sidebar-backdrop" id="close-sidebar" aria-label="关闭导航" hidden></button>
+		<button type="button" class="sidebar-backdrop" id="close-sidebar" aria-label="<?= $readerText('关闭导航', 'Close navigation') ?>" hidden></button>
 		<main class="workspace">
 			<header class="toolbar">
-				<button type="button" id="toggle-sidebar" class="mobile-menu" data-title="navigation" aria-controls="reader-sidebar" aria-expanded="false"><span class="reader-icon icon-all" aria-hidden="true"></span></button>
-				<div class="view-heading"><h1 id="view-title" data-i18n="all">全部文章</h1><span id="page-summary" role="status"></span></div>
-				<form role="search" id="article-search"><input type="search" name="search" data-placeholder="search" aria-label="搜索文章" autocomplete="off" /></form>
-				<select id="quick-layout" data-title="layout" aria-label="布局">
-					<option value="split" data-i18n="split">双栏阅读</option><option value="list" data-i18n="list">文章列表</option><option value="cards" data-i18n="cards">卡片网格</option>
+				<button type="button" id="toggle-sidebar" class="mobile-menu" data-title="navigation" aria-label="<?= $readerText('打开导航', 'Navigation') ?>" aria-controls="reader-sidebar" aria-expanded="false"><span class="reader-icon icon-all" aria-hidden="true"></span></button>
+				<div class="view-heading"><h1 id="view-title" data-i18n="all"><?= $readerText('全部文章', 'All articles') ?></h1><span id="page-summary" role="status"></span></div>
+				<form role="search" id="article-search"><input type="search" name="search" data-placeholder="search" aria-label="<?= $readerText('搜索文章', 'Search articles') ?>" placeholder="<?= $readerText('搜索文章', 'Search articles') ?>" autocomplete="off" /></form>
+				<select id="quick-layout" data-title="layout" aria-label="<?= $readerText('布局', 'Layout') ?>">
+					<option value="split" data-i18n="split"<?= $appearance['layout'] === 'split' ? ' selected' : '' ?>><?= $readerText('双栏阅读', 'Split view') ?></option><option value="list" data-i18n="list"<?= $appearance['layout'] === 'list' ? ' selected' : '' ?>><?= $readerText('文章列表', 'List') ?></option><option value="cards" data-i18n="cards"<?= $appearance['layout'] === 'cards' ? ' selected' : '' ?>><?= $readerText('卡片网格', 'Cards') ?></option>
 				</select>
-				<button type="button" id="refresh" data-title="refresh" aria-label="检查更新"><span class="reader-icon icon-refresh" aria-hidden="true"></span></button>
-				<button type="button" id="open-settings" data-title="settings" aria-controls="settings-page"><span class="reader-icon icon-settings" aria-hidden="true"></span><span data-i18n="settingsShort">设置</span></button>
-				<a id="sign-in" class="reader-sign-in" href="./?c=auth&amp;a=login" data-i18n="signIn" hidden>登录</a>
+				<button type="button" id="refresh" data-title="refresh" aria-label="<?= $readerText('刷新文章列表', 'Refresh article list') ?>"><span class="reader-icon icon-refresh" aria-hidden="true"></span></button>
+				<button type="button" id="open-settings" data-title="settings" aria-label="<?= $readerText('设置', 'Settings') ?>" aria-controls="settings-page"><span class="reader-icon icon-settings" aria-hidden="true"></span><span data-i18n="settingsShort"><?= $readerText('设置', 'Settings') ?></span></button>
+				<a id="sign-in" class="reader-sign-in" href="./?c=auth&amp;a=login" data-i18n="signIn" hidden><?= $readerText('登录', 'Sign in') ?></a>
 			</header>
 			<div id="status" class="status" role="status" aria-live="polite" hidden></div>
 			<div class="reading-workspace">
 				<section class="article-list-pane" aria-label="Articles">
 					<div class="article-list" id="article-list" aria-busy="false" tabindex="-1"></div>
-					<div class="pagination"><button type="button" id="previous-page" data-i18n="previous">上一页</button>
-						<button type="button" id="mark-page-read" data-i18n="markPageReadShort" data-title="markPageRead">本页已读</button>
-						<button type="button" id="next-page" data-i18n="next">下一页</button></div>
+					<div class="pagination"><button type="button" id="previous-page" data-i18n="previous"><?= $readerText('上一页', 'Previous page') ?></button>
+						<button type="button" id="mark-page-read" data-i18n="markPageReadShort" data-title="markPageRead"><?= $readerText('本页标为已读', 'Mark this page read') ?></button>
+						<button type="button" id="next-page" data-i18n="next"><?= $readerText('下一页', 'Next page') ?></button></div>
 				</section>
 				<section class="article-pane" id="article-pane" aria-label="Article">
-					<div class="article-empty" id="article-empty"><p data-i18n="choose">选择一篇文章开始阅读</p><small data-i18n="keyboard"></small></div>
+					<div class="article-empty" id="article-empty"><p data-i18n="choose"><?= $readerText('选择一篇文章开始阅读', 'Choose an article to start reading') ?></p><small data-i18n="keyboard"><?= $readerText('焦点在阅读器控件时：J / K 切换文章 · M 已读 · S 收藏', 'With focus in the reader controls: J / K next / previous · M read · S star') ?></small></div>
 					<div class="article-actions" id="article-actions" hidden>
 						<div class="article-header">
 							<button type="button" id="close-article" data-title="close" aria-label="关闭文章"><span class="reader-icon icon-previous" aria-hidden="true"></span></button>

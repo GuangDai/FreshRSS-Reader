@@ -1,6 +1,10 @@
 import { test, expect } from '../fixtures/reader.fixture.mjs';
 import { THEME_NAMES, themeSpec } from '../../../p/scripts/reader/appearance/themes.js';
 import { readFile, writeFile } from 'node:fs/promises';
+import {
+	appearanceGroup as choiceGroup, appearanceChoice as choiceTile, selectedAppearance as selectedChoice,
+	chooseAppearance as choose, expandThemeChoices, revealAppearanceChoice
+} from '../helpers/appearance.mjs';
 
 /** Measure rendered sRGB colours, including translucent backgrounds, independently of the theme implementation. */
 function textContrastSamples(selectors) {
@@ -42,16 +46,7 @@ async function selectSection(page, section) {
 	await expect(page.locator(`[data-settings-panel="${section}"]`)).toBeVisible();
 }
 
-function choiceGroup(page, key) { return page.locator(`fieldset.appearance-choice-group[data-preference="${key}"]`); }
-function selectedChoice(page, key) { return choiceGroup(page, key).locator('input[type="radio"]:checked'); }
-function choiceTile(page, key, value) { return choiceGroup(page, key).locator(`label[data-choice-value="${value}"]`); }
 function previewSurface(page) { return page.locator('[data-appearance-preview] > [data-appearance-preview-surface]'); }
-
-async function choose(page, key, value) {
-	const tile = choiceTile(page, key, value);
-	await tile.click();
-	await expect(tile.locator('input[type="radio"]')).toBeChecked();
-}
 
 async function articleColours(page) {
 	return page.frameLocator('#article-frame').locator('body').evaluate(node => ({
@@ -81,9 +76,9 @@ test('visual theme choices update an explained local preview while preserving th
 	await expect(page.locator('[data-appearance-preview]')).toContainText(/保存/);
 	for (const name of THEME_NAMES) {
 		const tile = choiceTile(page, 'theme', name);
+		await choose(page, 'theme', name);
 		await expect(tile.locator('.reader-miniature')).toHaveAttribute('data-theme', name);
 		await expect(tile.locator('.mini-sidebar, .mini-list, .mini-article')).toHaveCount(3);
-		await choose(page, 'theme', name);
 		await expect(selectedChoice(page, 'theme')).toHaveValue(name);
 		await expect(tile).toHaveAttribute('data-selected', 'true');
 		await expect(group.locator('input:checked')).toHaveCount(1);
@@ -168,13 +163,71 @@ test('visual theme choices update an explained local preview while preserving th
 	expect(reader.writes).toHaveLength(0);
 });
 
+test('theme browsing stays compact and pagination, filters and search never change the selected draft', async ({ page, reader }) => {
+	await openSettings(page);
+	const group = choiceGroup(page, 'theme');
+	const toggle = group.locator('[data-toggle-theme-gallery=theme]');
+	const tiles = group.locator('label.appearance-choice:visible');
+	const current = await selectedChoice(page, 'theme').inputValue();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(tiles).toHaveCount(1);
+	await expect(tiles.first()).toHaveAttribute('data-choice-value', current);
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	await expandThemeChoices(page);
+	const search = group.locator('[data-theme-search=theme]');
+	const previous = group.locator('[data-theme-page=previous]');
+	const next = group.locator('[data-theme-page=next]');
+	await search.fill('');
+	for (let pageIndex = 0; pageIndex < 6 && await previous.isEnabled(); pageIndex++) await previous.click();
+	await expect(tiles).toHaveCount(6);
+	const firstPage = await tiles.evaluateAll(nodes => nodes.map(node => node.dataset.choiceValue));
+	await expect(previous).toBeDisabled();
+	await next.click();
+	await expect(tiles).toHaveCount(6);
+	expect(await tiles.evaluateAll(nodes => nodes.map(node => node.dataset.choiceValue))).not.toEqual(firstPage);
+	await previous.click();
+	expect(await tiles.evaluateAll(nodes => nodes.map(node => node.dataset.choiceValue))).toEqual(firstPage);
+	for (const mode of ['light', 'dark']) {
+		await group.locator(`[data-theme-filter="${mode}"]`).click();
+		await expect(group.locator(`[data-theme-filter="${mode}"]`)).toHaveAttribute('aria-pressed', 'true');
+		const filtered = await tiles.evaluateAll(nodes => nodes.map(node => node.dataset.choiceValue));
+		expect(filtered.length).toBeGreaterThan(0); expect(filtered.length).toBeLessThanOrEqual(6);
+		for (const value of filtered) expect(themeSpec(value).dark, value).toBe(mode === 'dark');
+	}
+	await group.locator('[data-theme-filter=all]').click();
+	await search.fill('dracula');
+	await expect(tiles).toHaveCount(1);
+	await expect(tiles.first()).toHaveAttribute('data-choice-value', 'dracula');
+	await search.fill('no-matching-theme');
+	await expect(tiles).toHaveCount(0);
+	await expect(previous).toBeDisabled(); await expect(next).toBeDisabled();
+	await search.fill('nord');
+	await expect(tiles).toHaveCount(1);
+	await expect(tiles.first()).toHaveAttribute('data-choice-value', 'nord');
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(toggle).toBeFocused();
+	await expect(tiles).toHaveCount(1);
+	await expect(tiles.first()).toHaveAttribute('data-choice-value', current);
+	await expect(selectedChoice(page, 'theme')).toHaveValue(current);
+	await expect(page.locator('body')).toHaveAttribute('data-theme', reader.bootstrap.preferences.theme);
+	await expect(page.locator('#save-reader-settings')).toBeDisabled();
+	expect(reader.writes).toHaveLength(0);
+});
+
 test('appearance choice groups support native keyboard selection and explain layout differences visually', async ({ page, reader }) => {
 	await openSettings(page);
 	for (const [key, count] of [['theme', 33], ['layout', 3], ['density', 2], ['style', 3]]) {
 		const group = choiceGroup(page, key);
 		await expect(group.locator('input[type="radio"]')).toHaveCount(count);
 		await expect(group.locator('select')).toHaveCount(0);
-		const inputs = group.locator('input[type="radio"]');
+		if (key === 'theme') {
+			await expandThemeChoices(page);
+			await group.locator('[data-theme-filter=all]').click();
+			await group.locator('[data-theme-search=theme]').fill('');
+			await group.locator('label.appearance-choice:visible').first().click();
+		}
+		const inputs = group.locator('label.appearance-choice:visible input[type="radio"]');
 		const values = await inputs.evaluateAll(nodes => nodes.map(node => node.value));
 		const current = await selectedChoice(page, key).inputValue();
 		const next = values[(values.indexOf(current) + 1) % values.length];
@@ -186,7 +239,14 @@ test('appearance choice groups support native keyboard selection and explain lay
 		await page.keyboard.press('ArrowLeft');
 		await expect(selectedChoice(page, key)).toHaveValue(current);
 		await expect(selectedChoice(page, key)).toBeFocused();
+		if (key === 'theme') {
+			await page.keyboard.press('ArrowLeft');
+			await expect(selectedChoice(page, key)).toHaveValue(values.at(-1));
+			await page.keyboard.press('ArrowRight');
+			await expect(selectedChoice(page, key)).toHaveValue(current);
+		}
 	}
+	await page.locator('#discard-settings').click();
 	await expect(page.locator('#save-reader-settings')).toBeDisabled();
 	for (const layout of ['split', 'list', 'cards']) {
 		await choose(page, 'layout', layout);
@@ -440,7 +500,7 @@ test('appearance has labelled form controls and invalid values reveal the field 
 	await openSettings(page);
 	await expect(page.locator('[data-settings-panel=storage]')).toBeHidden();
 	await expect(page.locator('[name=cacheArticles]')).not.toBeVisible();
-	const first = choiceGroup(page, 'theme').locator('label').first();
+	const first = choiceGroup(page, 'theme').locator('label.appearance-choice:visible').first();
 	await first.scrollIntoViewIfNeeded();
 	const theme = await first.boundingBox();
 	const settings = await page.locator('#settings-page').boundingBox();
@@ -449,6 +509,7 @@ test('appearance has labelled form controls and invalid values reveal the field 
 	expect(theme.width).toBeGreaterThanOrEqual(44);
 	expect(theme.height).toBeGreaterThanOrEqual(44);
 	await expect(choiceGroup(page, 'theme')).toHaveAccessibleName('主题配色');
+	await revealAppearanceChoice(page, 'theme', 'nord');
 	await expect(choiceTile(page, 'theme', 'nord').locator('input')).toHaveAccessibleName('Nord');
 	await expect(page.locator('[name=sidebarWidth]')).not.toBeVisible();
 	await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('appearance.png') });

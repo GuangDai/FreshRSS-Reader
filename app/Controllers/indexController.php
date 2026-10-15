@@ -16,74 +16,6 @@ class FreshRSS_index_Controller extends FreshRSS_ActionController {
 		Minz_Request::forward(['c' => 'reader', 'a' => 'index']);
 	}
 
-	/**
-	 * @return '.future'|'.today'|'.yesterday'|''
-	 */
-	private static function dayRelative(int $timestamp, bool $mayBeFuture): string {
-		static $today = null;
-		if (!is_int($today)) {
-			$today = strtotime('today') ?: 0;
-		}
-		if ($today <= 0) {
-			return '';
-		} elseif ($mayBeFuture && ($timestamp >= $today + 86400)) {
-			return '.future';
-		} elseif ($timestamp >= $today) {
-			return '.today';
-		} elseif ($timestamp >= $today - 86400) {
-			return '.yesterday';
-		}
-		return '';
-	}
-
-	/**
-	 * Content for displaying a transition between entries when sorting by specific criteria.
-	 */
-	public static function transition(FreshRSS_Entry $entry): string {
-		return match (FreshRSS_Context::$sort) {
-			'id' => _t('index.feed.received' . self::dayRelative($entry->dateAdded(raw: true), mayBeFuture: false)) .
-				' — ' . timestamptodate($entry->dateAdded(raw: true), hour: false),
-			'date' => _t('index.feed.published' . self::dayRelative($entry->date(raw: true), mayBeFuture: true)) .
-				' — ' . timestamptodate($entry->date(raw: true), hour: false),
-			'lastUserModified' => _t('index.feed.userModified' . self::dayRelative($entry->lastUserModified() ?? 0, mayBeFuture: false)) .
-				' — ' . timestamptodate($entry->lastUserModified() ?? 0, hour: false),
-			'c.name' => $entry->feed()?->category()?->name() ?? '',
-			'f.name' => $entry->feed()?->name() ?? '',
-			default => '',
-		};
-	}
-
-	/**
-	 * Produce a hyperlink to the next transition of entries.
-	 */
-	public static function transitionLink(FreshRSS_Entry $entry, int $offset = 0): string {
-		if (in_array(FreshRSS_Context::$sort, ['c.name', 'f.name'], true)) {
-			return Minz_Url::display(Minz_Request::modifiedCurrentRequest([
-				'get' => match (FreshRSS_Context::$sort) {
-					'c.name' => 'c_' . ($entry->feed()?->category()?->id() ?? '0'),
-					'f.name' => 'f_' . ($entry->feed()?->id() ?? '0'),
-				},
-			]));
-		}
-		$operator = match (FreshRSS_Context::$sort) {
-			'id' => 'date',
-			'date' => 'pubdate',
-			'lastUserModified' => 'userdate',
-			default => throw new InvalidArgumentException('Unsupported sort criterion for transition: ' . FreshRSS_Context::$sort),
-		};
-		$offset = FreshRSS_Context::$order === 'ASC' ? $offset : -$offset;
-		$timestamp = match (FreshRSS_Context::$sort) {
-			'id' => $entry->dateAdded(raw: true),
-			'date' => $entry->date(raw: true),
-			'lastUserModified' => $entry->lastUserModified() ?? 0,
-		};
-		$searchString = $operator . ':' . ($offset < 0 ? '/' : '') . date('Y-m-d', $timestamp + ($offset * 86400)) . ($offset > 0 ? '/' : '');
-		return Minz_Url::display(Minz_Request::modifiedCurrentRequest([
-			'search' => FreshRSS_Context::$search->toString() === '' ? $searchString :
-				FreshRSS_Context::$search->enforce(new FreshRSS_Search($searchString))->toString(),
-			]));
-	}
-
 	/** Retain bookmarked reading URLs while serving the same home interface. */
 	public function normalAction(): void {
 		$this->indexAction();
@@ -194,11 +126,10 @@ class FreshRSS_index_Controller extends FreshRSS_ActionController {
 
 	/**
 	 * This method returns a list of entries based on the Context object.
-	 * @param int $postsPerPage override `FreshRSS_Context::$number`
 	 * @return Generator<FreshRSS_Entry>
 	 * @throws FreshRSS_EntriesGetter_Exception
 	 */
-	public static function listEntriesByContext(?int $postsPerPage = null): Generator {
+	public static function listEntriesByContext(): Generator {
 		$entryDAO = FreshRSS_Factory::createEntryDao();
 
 		$get = FreshRSS_Context::currentGet(true);
@@ -260,7 +191,7 @@ class FreshRSS_index_Controller extends FreshRSS_ActionController {
 			$type, $id, FreshRSS_Context::$state, FreshRSS_Context::$search,
 			id_min: $id_min, id_max: FreshRSS_Context::$id_max, sort: FreshRSS_Context::$sort, order: FreshRSS_Context::$order,
 			continuation_id: FreshRSS_Context::$continuation_id, continuation_values: $continuation_values,
-			limit: $postsPerPage ?? FreshRSS_Context::$number, offset: FreshRSS_Context::$offset,
+			limit: FreshRSS_Context::$number, offset: FreshRSS_Context::$offset,
 			secondary_sort: FreshRSS_Context::$secondary_sort, secondary_sort_order: FreshRSS_Context::$secondary_sort_order);
 	}
 

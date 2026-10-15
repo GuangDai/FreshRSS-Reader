@@ -3,127 +3,33 @@
 
 ## Personnaliser la vue
 
-### Langue
+Ouvrez les paramètres avec le bouton en forme de roue dentée dans la barre de lecture. La page d’accueil utilise une seule interface de lecture, dont l’apparence se règle ici.
 
-À l’heure actuelle, FreshRSS est disponible en 13 langues. Après validation
-de ce choix, l’interface sera affichée dans la langue choisie, même si
-certaines parties de l’interface peuvent ne pas encore avoir été
-traduites. Si vous voulez aider à la traduction, regardez comment vous
-pouvez [contribuer au
-projet](../contributing.md#contribute-to-internationalization-i18n).
+### Thème et couleurs de jour et de nuit
 
-Il y a des parties de FreshRSS qui ne sont pas traduites et qui n’ont pas
-vocation à l’être. Pour le moment, les logs visibles dans l’application
-ainsi que celle générées par le script de mise à jour automatique en font
-partie.
+La catégorie d’apparence propose 32 palettes. Chaque sélecteur affiche d’abord le choix actuel. Le bouton de changement de thème ouvre une liste de six choix au maximum par page, avec des filtres clair et sombre et une recherche par nom ou description de palette. La recherche, les filtres et la pagination ne modifient pas le thème sélectionné.
 
-Les langues disponibles sont:
+Vous pouvez choisir un thème fixe ou suivre le mode clair ou sombre de l’appareil avec deux thèmes distincts pour le jour et la nuit. Les nouveaux comptes utilisent Sunset ; les palettes par défaut du mode automatique sont Nord le jour et Sunset la nuit.
 
-| Langue (nom français)   | Langue (endonyme)      | Classé par code de langue (ISO-639-1) |
-|:------------------------|:-----------------------|:-------------------------------------|
-| Biélorusse              | Беларуская             | be                                   |
-| Tchèque                 | Čeština                | cs                                   |
-| Allemand                | Deutsch                | de                                   |
-| Grec                    | Ελληνικά               | el                                   |
-| Anglais                 | English                | en                                   |
-| Anglais (États-Unis)    | English (United States) | en-US                               |
-| Espagnol                | Español                | es                                   |
-| Farsi                   | فارسی                  | fa                                   |
-| Finnois                 | Suomi                  | fi                                   |
-| Français                | Français               | fr                                   |
-| Hébreu                  | עברית                  | he                                   |
-| Hongrois                | Magyar                 | hu                                   |
-| Indonésien              | Bahasa Indonesia       | id                                   |
-| Italien                 | Italiano               | it                                   |
-| Japonais                | 日本語                  | ja                                   |
-| Coréen                  | 한국어                  | ko                                   |
-| Letton                  | Latviešu               | lv                                   |
-| Néerlandais             | Nederlands             | nl                                   |
-| Occitan                 | Occitan                | oc                                   |
-| Polonais                | Polski                 | pl                                   |
-| Portugais brésilien     | Português (Brasil)     | pt-BR                                |
-| Portugais               | Português (Portugal)   | pt-PT                                |
-| Russe                   | Русский                | ru                                   |
-| Slovaque                | Slovenčina             | sk                                   |
-| Turc                    | Türkçe                 | tr                                   |
-| Ukrainien               | Українська             | uk                                   |
-| Chinois (simplifié, République populaire de Chine) | 简体中文      | zh-CN               |
-| Chinois (traditionnel, Taïwan) | 正體中文          | zh-TW                               |
+La sélection met à jour l’aperçu local. Vous pouvez agrandir cet aperçu pour comparer la liste des abonnements, la liste des articles et le contenu d’un article ; sur téléphone, ces trois zones se consultent séparément. Enregistrez les paramètres pour appliquer l’apparence à l’interface de lecture. Un retour à la lecture sans enregistrer conserve l’apparence déjà sauvegardée ; en cas d’échec de l’enregistrement, les modifications restent disponibles pour une nouvelle tentative.
 
-**Note** pour les langues régionales, nous suivons les recommandations de _ISO-639-1_ et _ISO-3166-1 alpha-2_.
+### Disposition, densité et style de lecture
 
-### Thème
+Les dispositions proposées sont la vue en colonnes, la liste et les cartes. Lorsque la place le permet, la vue en colonnes affiche côte à côte les abonnements, la liste des articles et l’article ouvert. La liste et les cartes proposent d’autres présentations pour parcourir les articles. Sur un écran étroit, l’interface s’adapte à la place disponible sans modifier la préférence enregistrée.
 
-Les goûts et les couleurs, ça ne se discute pas. C’est pourquoi FreshRSS
-propose 13 thèmes officiels :
+La densité de la liste peut être confortable ou compacte. Les styles de lecture proposent des surfaces discrètes, une présentation avec une police à empattements rappelant le papier, ou des bordures et des textes secondaires plus marqués. Ils conservent les couleurs de la palette sélectionnée.
 
-| Thème       | Auteur                                    | Notes                                                          |
-|:--------------|:-------------------------------------------------------|:--------------------------------------------------------------|
-| Alternative Dark | Ghost | |
-| Ansum | Thomas Guesnon  | |
-| Dark | AD | |
-| Dark pink | Miicat_47 | |
-| Flat design | Marien Fressinaud | N’est plus pris en charge. Sera supprimé avec FreshRSS V1.22.0 |
-| Mapco | Thomas Guesnon  | |
-| Nord | joelchrono12 | |
-| Origine | Marien Fressinaud | (default theme) |
-| Origine-compact | Kevin Papst | |
-| Pafat | Plopoyop | |
-| Swage | Patrick Crandol | |
+### Typographie et largeur des articles
 
-Si aucun de ceux proposés ne convient, il est toujours possible de [créer
-son propre thème](../developers/04_Frontend/02_Design.md).
+La catégorie de lecture permet de régler la taille du texte des articles, l’interligne et la largeur maximale du contenu. Elle propose aussi les largeurs souhaitées pour la barre des abonnements et la liste des articles en vue en colonnes. Si l’écran est trop étroit, l’interface ajuste les largeurs affichées sans remplacer les valeurs enregistrées.
 
-Pour sélectionner un thème, il suffit de faire défiler les thèmes jusqu’à
-l’apparition du thème choisi. Après validation, le thème sera appliqué à
-l’interface.
+Ces réglages numériques remplacent les anciens choix Fine, Moyenne, Large et Pas de limite. Le réglage des icônes d’en-tête et de pied d’article et les anciennes vues normale, globale et de lecture ne font plus partie de l’interface de lecture.
 
-### Largeur du contenu
+### Langue et fuseau horaire
 
-Il y en a qui préfère des lignes de texte courtes, d’autres qui préfèrent
-maximiser l’espace disponible sur l’écran. Pour satisfaire le maximum de
-personne, il est possible de choisir la largeur du contenu affiché. Il y a
-quatre réglages disponibles :
+Ouvrez l’outil de langue et de fuseau horaire depuis la catégorie d’apparence. Choisissez la langue de l’interface et le fuseau horaire utilisé pour les dates, puis validez les modifications dans ce formulaire. Le fuseau par défaut correspond à celui de l’instance.
 
-* **Fine** qui affiche le contenu jusqu’à 550 pixels
-* **Moyenne** qui affiche le contenu jusqu’à 800 pixels
-* **Large** qui affiche le contenu jusqu’à 1000 pixels
-* **Pas de limite** qui affiche le contenu sur 100% de la place disponible
-
-### Icônes d’article
-
-Veuillez noter que cette section n’affecte que la vue normale.
-
-![Configuration des icônes
-d’article](../../en/img/users/configuration.article.icons.png)
-
-Chaque article est rendu avec un en-tête (ligne supérieure) et un pied de
-page (ligne inférieure). Dans cette section, vous pouvez choisir ce qui sera
-affiché dans ceux-ci.
-
-Si vous désactivez tous les éléments de la ligne supérieure, vous pourrez
-toujours les voir, puisqu’il contient le nom du flux et le titre de
-l’article. Mais si vous faites le même chose pour la ligne inférieure, elle
-sera vide.
-
-### Temps d’affichage de la notification HTML5
-
-Après la mise à jour automatique des flux, FreshRSS utilise l’API de
-notification de HTML5 pour avertir de l’arrivée de nouveaux articles.
-
-Il est possible de régler la durée d’affichage de cette notification. Par
-défaut, la valeur est 0.
-
-### Show the navigation button
-
-By default, FreshRSS displays buttons to ease the article navigation when
-browsing on mobile. The drawback is that they eat up some precious space.
-
-![navigation button
-configuration](../../en/img/users/configuration.navigation.button.png)
-
-If you don’t use those buttons because you never browse on mobile or because
-you browse with gestures, you can disable them from the interface.
+Les traductions peuvent être incomplètes selon la langue. Pour participer, consultez les [instructions de contribution aux traductions](../contributing.md#contribute-to-internationalization-i18n).
 
 ## Reading
 

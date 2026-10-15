@@ -32,7 +32,7 @@ Run the following commands from the repository root after installing Composer an
 | Directory | Purpose | Entry point |
 | --- | --- | --- |
 | `app/`, `lib/`, `cli/` | PHP unit and regression tests, following the application structure | `composer run-script phpunit` |
-| `frontend/` | Node.js unit tests, grouped by Reader and Classic features | `npm run test:frontend` |
+| `frontend/` | Node.js unit tests for reading modules and shared management scripts | `npm run test:frontend` |
 | `browser/` | Browser behavior, appearance, accessibility and responsive layouts | `npm run test:browser` |
 | `integration/refresh/` | Real refresh workers, concurrency, recovery and legacy entry points | `make test-integration-refresh` |
 | `integration/database/` | Real schemas, database contracts and concurrent writes | `make test-integration-database` |
@@ -53,6 +53,9 @@ Browser tests are grouped under `browser/reader/`, `browser/classic/`, `browser/
 All configurations share defaults in `browser/config/base.mjs`; results go to the ignored
 `bin/test-results/browser/` directory.
 
+`browser/classic/panels.spec.mjs` covers the shared subscription management panels;
+the directory name does not indicate a separate reading interface.
+
 The default configuration discovers every browser specification with Chromium.
 The following focused configurations preserve their individual viewport and browser matrices:
 
@@ -60,7 +63,6 @@ The following focused configurations preserve their individual viewport and brow
 | --- | --- |
 | `npm run test:browser:appearance` | Reader appearance: desktop, phone and landscape Chromium |
 | `npm run test:browser:reading` | Reader interactions: Chromium desktop, small phone, phone and landscape; Firefox and WebKit |
-| `npm run test:browser:classic` | Classic interactions: Chromium, Firefox and WebKit |
 | `npm run test:browser:settings` | Settings page: desktop, phone and small phone Chromium; Firefox and WebKit |
 | `npm run test:browser:account` | Account settings: desktop and phone Chromium; Firefox and WebKit |
 | `npm run test:browser:embed` | Embedded settings: Chromium, Firefox and WebKit |
@@ -87,9 +89,6 @@ npm run test:browser
 Some tests change preferences, subscriptions and article state. Use dedicated test accounts.
 Missing credentials cause applicable tests to skip; a skipped test has not verified that behavior.
 `settings-page.config.mjs` also supports optional local credentials in the ignored `bin/ui-review.env` file.
-
-`node tests/browser/tools/capture-classic-themes.mjs` generates Classic theme preview images
-using an isolated account or `FRESHRSS_TEST_STORAGE_STATE`.
 
 ## Integration prerequisites
 

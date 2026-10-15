@@ -1,4 +1,5 @@
 import { test as base, expect } from '../../fixtures/reader.fixture.mjs';
+import { chooseAppearance } from '../../helpers/appearance.mjs';
 
 const mockAccount = () => ({
 	schema: {
@@ -93,7 +94,7 @@ test('settings deep link, refresh, Back and Forward preserve the current categor
 
 test('reader draft survives section changes and save stays on the settings page', async ({ page, settingsReader }) => {
 	await page.locator('#open-settings').click();
-	await page.locator('input[type=radio][name=theme][value="nord"]').check();
+	await chooseAppearance(page, 'theme', 'nord');
 	await selectSection(page, 'reading'); await page.locator('[name=fontSize]').fill('21');
 	await selectSection(page, 'subscriptions');
 	await expect(page.locator('#save-reader-settings')).toBeEnabled();
@@ -147,7 +148,7 @@ test('invalid reader draft reveals its category and failed saves preserve the dr
 });
 
 test('returning to reading and Forward retain an unsaved reader draft without applying it to reading', async ({ page, settingsReader }) => {
-	await page.locator('#open-settings').click(); await page.locator('input[type=radio][name=theme][value="nord"]').check();
+	await page.locator('#open-settings').click(); await chooseAppearance(page, 'theme', 'nord');
 	await selectSection(page, 'reading'); await page.locator('[name=fontSize]').fill('21');
 	await page.locator('#cancel-settings').click();
 	await expect(page.locator('#settings-page')).toBeHidden();
@@ -241,7 +242,7 @@ test('subscription batch editing saves only the changed field with the selected 
 });
 
 test('one save applies appearance and account changes across categories', async ({ page, settingsReader }) => {
-	await page.locator('#open-settings').click(); await page.locator('input[type=radio][name=theme][value="nord"]').check();
+	await page.locator('#open-settings').click(); await chooseAppearance(page, 'theme', 'nord');
 	await selectSection(page, 'reading');
 	await page.locator('[data-account-field="mark_when.article"] input[type=checkbox]').check();
 	await selectSection(page, 'storage');

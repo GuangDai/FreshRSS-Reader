@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseAppearance } from '../helpers/appearance.mjs';
 
 const username = process.env.FRESHRSS_TEST_USER;
 const password = process.env.FRESHRSS_TEST_PASSWORD;
@@ -324,7 +325,7 @@ test('Back restores the saved appearance and Forward restores the settings draft
 	await expect(page.locator('#settings-page')).toBeVisible();
 	const originalPreference = await page.locator('input[type=radio][name=theme]:checked').inputValue();
 	const draftTheme = originalTheme === 'dark' ? 'light' : 'dark';
-	await page.locator(`input[type=radio][name=theme][value="${draftTheme}"]`).check();
+	await chooseAppearance(page, 'theme', draftTheme);
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
 	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', draftTheme);
 	await page.goBack();
@@ -380,7 +381,7 @@ for (const change of ['reopen', 'edit']) {
 			await page.locator('#open-settings').click();
 		}
 		await settingsSection(page, 'appearance');
-		await page.locator('input[type=radio][name=theme][value="dracula"]').check();
+		await chooseAppearance(page, 'theme', 'dracula');
 		await page.evaluate(async () => {
 			await globalThis.readerTestFinishImport();
 			await new Promise(resolve => globalThis.requestAnimationFrame(resolve));
@@ -417,7 +418,7 @@ test('a local theme draft preserves article scroll until saving applies the sele
 	const draftTheme = originalTheme === 'dracula' ? 'nord' : 'dracula';
 	// Exercise the background article state while phone reading covers the main toolbar.
 	await page.locator('#open-settings').dispatchEvent('click');
-	await page.locator(`input[type=radio][name=theme][value="${draftTheme}"]`).check();
+	await chooseAppearance(page, 'theme', draftTheme);
 	await expect(page.locator('body')).toHaveAttribute('data-theme', originalTheme);
 	await expect(page.locator('.appearance-live-preview > [data-appearance-preview-surface]')).toHaveAttribute('data-theme', draftTheme);
 	await page.locator('#cancel-settings').click();

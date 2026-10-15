@@ -194,7 +194,7 @@ input[type="search"], select {
 
 .view-heading { display: grid; min-width: 0; grid-area: heading; gap: 4px; }
 
-#page-summary { color: var(--muted); font-size: .8667rem; line-height: 1.4; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#page-summary { color: var(--muted); font-size: .8667rem; line-height: 1.4; min-height: 1.4em; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 h1 { margin: 0; font-size: 1.4286rem; font-weight: 650; letter-spacing: -.4px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

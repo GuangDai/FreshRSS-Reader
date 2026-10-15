@@ -79,7 +79,7 @@ return array (
 		'site' => true,
 	),
 	'filters' => [],
-	'theme' => 'Origine',
+	'theme' => 'base-theme',
 	'darkMode' => 'auto',
 	'content_width' => 'thin',
 	'shortcuts' => array (

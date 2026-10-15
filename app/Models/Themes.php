@@ -5,7 +5,7 @@ class FreshRSS_Themes extends Minz_Model {
 
 	private static string $themesUrl = '/themes/';
 	private static string $defaultIconsUrl = '/themes/icons/';
-	public static string $defaultTheme = 'Origine';
+	public static string $defaultTheme = 'base-theme';
 
 	/** @return list<string> */
 	public static function getList(): array {

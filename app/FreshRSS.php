@@ -112,7 +112,8 @@ class FreshRSS extends Minz_FrontController {
 		if (!FreshRSS_Context::hasUserConf()) {
 			return;
 		}
-		$theme = FreshRSS_Themes::load(FreshRSS_Context::userConf()->theme);
+		// Management tools share one base; reading appearance is owned by the reading application.
+		$theme = FreshRSS_Themes::load(FreshRSS_Themes::$defaultTheme);
 		if (is_array($theme)) {
 			foreach (array_reverse($theme['files']) as $file) {
 				switch (substr($file, -3)) {

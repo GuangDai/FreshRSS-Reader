@@ -1,7 +1,7 @@
 import { browserConfig } from './base.mjs';
 
 export default browserConfig({
-	testMatch: '**/reader/appearance.spec.mjs',
+	testMatch: ['**/reader/appearance.spec.mjs', '**/reader/startup.spec.mjs', '**/reader/module-cache.spec.mjs'],
 	outputName: 'appearance',
 	projects: [
 		{ name: 'desktop', use: { browserName: 'chromium' } },

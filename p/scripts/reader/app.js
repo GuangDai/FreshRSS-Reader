@@ -62,6 +62,7 @@ let notice = bootstrap.adjustments?.length ? t('adjusted') + bootstrap.adjustmen
 let appearanceEpoch = 0;
 let appearanceDraftRevision = 0;
 let readerDraft = null;
+let settingsBuilt = false;
 let appearanceFrame = 0;
 let searchTimer = 0;
 let searchComposing = false;
@@ -93,7 +94,6 @@ const feedEditor = new FeedEditor({
 });
 let navigationEpoch = 0;
 const navigation = new ReaderNavigation({ history: window.history, location: window.location, onRestore: restoreNavigation });
-settingsSubscriptions.mount();
 
 function sameList(value) {
 	return store.cursor === value.cursor && ['get', 'filter', 'search', 'state'].every(key => store.query[key] === value.query[key]);
@@ -130,6 +130,7 @@ async function restoreNavigation(value, panel, load = false) {
 	if (previousSidebar !== (panel === 'sidebar')) sidebar(panel === 'sidebar', false);
 	if (showSettings) {
 		if (settingsRoot.hidden) {
+			ensureSettingsBuilt();
 			appearanceEpoch++; fillSettings(readerDraft || saved); validateSettings(readerDraft || saved); showSettingsPage();
 		}
 		settingsPage.activate(navigation.settingsSection);
@@ -173,7 +174,13 @@ function localise(root = document) {
 	});
 }
 
+function ensureSettingsBuilt() {
+	if (settingsBuilt) return;
+	buildSettings(); settingsSubscriptions.mount(); settingsPage.updateFeeds(); localise(settingsRoot);
+}
+
 function buildSettings() {
+	settingsBuilt = true;
 	settingsRoot.querySelectorAll('[data-reader-preferences]').forEach(node => node.replaceChildren());
 	$('server-limits').replaceChildren();
 	const groups = new Map();
@@ -287,6 +294,7 @@ function syncSettingsSave(values = formValues()) {
 }
 
 function syncThemeSettings(values) {
+	if (!settingsBuilt) return;
 	for (const key of ['lightTheme', 'darkTheme']) {
 		const label = settingsRoot.querySelector(`[data-preference="${key}"]`);
 		if (label) label.hidden = values.theme !== 'auto';
@@ -295,6 +303,7 @@ function syncThemeSettings(values) {
 }
 
 function formValues() {
+	if (!settingsBuilt) return { ...(readerDraft || saved) };
 	return Object.fromEntries(Object.entries(schema).map(([key, spec]) => {
 		const input = form.elements.namedItem(key);
 		return [key, spec.type === 'boolean' ? input.checked : spec.type === 'integer' ? input.valueAsNumber : input.value];
@@ -327,7 +336,7 @@ function validateSettings(values, focus = false) {
 
 function preferenceInputs(key) {
 	const control = form.elements.namedItem(key);
-	return control instanceof RadioNodeList ? Array.from(control) : [control];
+	return control instanceof RadioNodeList ? Array.from(control) : control ? [control] : [];
 }
 
 function activeTheme() { return resolveTheme(current, media.matches); }
@@ -379,7 +388,8 @@ function renderFeeds() {
 		clearedSession = store.sessionEpoch; feedEditor.suspend(true); feedSelection.activate(false);
 	}
 	feedTree.update(store.feeds, store.categories, store.feedRevision);
-	settingsSubscriptions.update(); settingsPage.updateFeeds();
+	settingsSubscriptions.update();
+	if (settingsBuilt) settingsPage.updateFeeds();
 	feedTree.select(store.query.get);
 	if (reconciledFeeds !== store.feeds) { reconciledFeeds = store.feeds; feedSelection.reconcile(store.feeds); }
 	renderFeedSelection();
@@ -699,7 +709,7 @@ function closeArticle() { cancelArticleNavigation(); navigation.closeArticle(nav
 document.body.dataset.readOnly = String(Boolean(bootstrap.readOnly));
 if (bootstrap.readOnly) document.querySelectorAll('[data-open-settings]').forEach(link => { link.hidden = true; });
 $('sign-in').hidden = !bootstrap.readOnly;
-buildSettings(); localise(); applyAppearance(saved);
+localise(); applyAppearance(saved);
 document.querySelector('.skip-link').addEventListener('click', event => {
 	if (settingsRoot.hidden) return;
 	event.preventDefault(); $('settings-section-heading').focus();
@@ -825,6 +835,7 @@ $('status').addEventListener('click', retryRequest);
 $('article-status').addEventListener('click', retryRequest);
 $('settings-status').addEventListener('click', retryRequest);
 function openSettings(section = navigation.settingsSection) {
+	ensureSettingsBuilt();
 	appearanceEpoch++; fillSettings(readerDraft || saved); validateSettings(readerDraft || saved); sidebar(false);
 	navigation.openPanel('settings', navigationSnapshot()); navigation.setSettingsSection(section);
 	showSettingsPage(); settingsPage.activate(section, true);

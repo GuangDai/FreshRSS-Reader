@@ -1,8 +1,8 @@
 {
-	"name": "",
-	"author": "Your name",
-	"description": "A wonderful base theme",
-	"version": 0.1,
+	"name": "FreshRSS",
+	"author": "FreshRSS contributors",
+	"description": "Shared administration and installation styles",
+	"version": 1,
 	"files": ["frss.css", "base.css"],
-	"theme-color": "#123456"
+	"theme-color": "#f7f8fa"
 }

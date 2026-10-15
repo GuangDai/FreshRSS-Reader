@@ -63,6 +63,14 @@ export class AppearanceChoices {
 		help.id = 'appearance-' + key + '-help'; fieldset.append(help);
 		const tools = this.element('div', 'appearance-choice-tools');
 		const current = this.element('span', 'appearance-current-choice'); tools.append(current);
+		let gallery = null;
+		if (isTheme(key)) {
+			const toggle = this.element('button', 'theme-gallery-toggle', this.t('appearanceThemeChange')); toggle.type = 'button';
+			toggle.dataset.toggleThemeGallery = key; toggle.setAttribute('aria-expanded', 'false');
+			toggle.setAttribute('aria-controls', 'appearance-' + key + '-gallery');
+			toggle.addEventListener('click', () => this.toggleGallery(key)); tools.append(toggle);
+			gallery = { expanded: false, opened: false, page: 0, filter: 'all', query: '', toggle };
+		}
 		const expand = this.element('button', 'appearance-preview-expand', this.t('appearancePreviewExpand')); expand.type = 'button';
 		expand.addEventListener('click', () => {
 			if (key === 'lightTheme') this.previewDark = false;
@@ -71,6 +79,7 @@ export class AppearanceChoices {
 			if (this.preview) this.preview.dialog.showModal();
 		}); tools.append(expand); fieldset.append(tools);
 		const grid = this.element('div', 'appearance-choice-grid ' + (isTheme(key) ? 'theme-choice-grid' : 'layout-choice-grid'));
+		if (gallery) grid.id = 'appearance-' + key + '-gallery';
 		const choices = [];
 		for (const value of spec.options) {
 			const label = this.element('label', 'appearance-choice'); label.dataset.choiceValue = value;
@@ -79,7 +88,6 @@ export class AppearanceChoices {
 			const name = isTheme(key) ? value === 'auto' ? this.t('auto') : themeName(value) : this.t(value);
 			input.setAttribute('aria-label', name);
 			const content = this.element('span', 'appearance-choice-content');
-			const miniature = this.reader(true); content.append(miniature);
 			const title = this.element('span', 'appearance-choice-label');
 			const check = this.element('span', 'appearance-choice-check', '✓'); check.setAttribute('aria-hidden', 'true');
 			title.append(this.element('strong', '', name), check); content.append(title);
@@ -92,10 +100,94 @@ export class AppearanceChoices {
 				if (key === 'darkTheme') this.previewDark = true;
 				this.sync({ ...this.values, [key]: input.value }, this.saved);
 			});
-			choices.push({ value, name, input, label, miniature, state });
+			choices.push({ value, name, input, label, content, miniature: null, state });
 		}
-		fieldset.append(grid); this.groups.set(key, { fieldset, choices, current }); this.sync(this.values, this.saved);
+		if (gallery) {
+			gallery.controls = this.galleryControls(key, gallery); fieldset.append(gallery.controls);
+			gallery.empty = this.element('p', 'theme-gallery-empty', this.t('appearanceThemeNoResults'));
+			gallery.pagination = this.element('div', 'theme-gallery-pagination');
+			gallery.previous = this.element('button', '', this.t('appearanceThemePrevious')); gallery.previous.type = 'button';
+			gallery.previous.dataset.themePage = 'previous';
+			gallery.status = this.element('span', 'theme-gallery-page'); gallery.status.setAttribute('role', 'status');
+			gallery.status.setAttribute('aria-live', 'polite'); gallery.status.setAttribute('aria-atomic', 'true');
+			gallery.next = this.element('button', '', this.t('appearanceThemeNext')); gallery.next.type = 'button'; gallery.next.dataset.themePage = 'next';
+			gallery.previous.addEventListener('click', () => { gallery.page--; this.renderChoices(key); });
+			gallery.next.addEventListener('click', () => { gallery.page++; this.renderChoices(key); });
+			gallery.pagination.append(gallery.previous, gallery.status, gallery.next);
+			fieldset.append(grid, gallery.empty, gallery.pagination);
+		} else fieldset.append(grid);
+		this.groups.set(key, { fieldset, choices, current, grid, gallery }); this.sync(this.values, this.saved);
 		return fieldset;
+	}
+
+	galleryControls(key, gallery) {
+		const controls = this.element('div', 'theme-gallery-controls');
+		const label = this.element('label', 'theme-gallery-search'); label.append(this.element('span', '', this.t('appearanceThemeSearch')));
+		gallery.search = this.element('input'); gallery.search.type = 'search'; gallery.search.dataset.themeSearch = key;
+		gallery.search.placeholder = this.t('appearanceThemeSearchHint'); gallery.search.autocomplete = 'off';
+		gallery.search.addEventListener('input', () => {
+			gallery.query = gallery.search.value.trim().toLocaleLowerCase(); gallery.page = 0; this.renderChoices(key);
+		});
+		label.append(gallery.search); controls.append(label);
+		const filters = this.element('div', 'theme-gallery-filters'); filters.setAttribute('role', 'group');
+		filters.setAttribute('aria-label', this.t('appearanceThemeFilter')); gallery.filters = [];
+		for (const [filter, title] of [['all', 'appearanceThemeFilterAll'], ['light', 'appearanceThemeFilterLight'], ['dark', 'appearanceThemeFilterDark']]) {
+			const button = this.element('button', '', this.t(title)); button.type = 'button'; button.dataset.themeFilter = filter;
+			button.addEventListener('click', () => { gallery.filter = filter; gallery.page = 0; this.renderChoices(key); });
+			filters.append(button); gallery.filters.push(button);
+		}
+		controls.append(filters); return controls;
+	}
+
+	filteredChoices(group) {
+		const { query, filter } = group.gallery;
+		const exact = query ? group.choices.filter(choice => [choice.value, choice.name.toLocaleLowerCase()].includes(query)) : [];
+		return (exact.length ? exact : group.choices).filter(choice => {
+			if (filter !== 'all' && (choice.value === 'auto' || themeSpec(choice.value).dark !== (filter === 'dark'))) return false;
+			return !query || exact.length > 0 || `${choice.value} ${choice.name} ${this.description(group.fieldset.dataset.preference, choice.value)}`
+				.toLocaleLowerCase().includes(query);
+		});
+	}
+
+	toggleGallery(key) {
+		const group = this.groups.get(key); const { gallery } = group;
+		gallery.expanded = !gallery.expanded;
+		if (gallery.expanded && !gallery.opened) {
+			const index = this.filteredChoices(group).findIndex(choice => choice.value === this.values[key]);
+			gallery.page = Math.max(0, Math.floor(index / 6)); gallery.opened = true;
+		}
+		this.renderChoices(key);
+	}
+
+	renderChoices(key) {
+		const group = this.groups.get(key); const { fieldset, choices, grid, gallery } = group;
+		let visible = choices;
+		if (gallery) {
+			const filtered = this.filteredChoices(group); const pages = Math.max(1, Math.ceil(filtered.length / 6));
+			gallery.page = Math.max(0, Math.min(gallery.page, pages - 1));
+			visible = gallery.expanded ? filtered.slice(gallery.page * 6, gallery.page * 6 + 6) : choices.filter(choice => choice.value === this.values[key]);
+			grid.dataset.expanded = String(gallery.expanded); gallery.toggle.setAttribute('aria-expanded', String(gallery.expanded));
+			grid.dataset.empty = String(gallery.expanded && filtered.length === 0);
+			gallery.toggle.textContent = this.t(gallery.expanded ? 'appearanceThemeCollapse' : 'appearanceThemeChange');
+			gallery.controls.hidden = !gallery.expanded; gallery.pagination.hidden = !gallery.expanded || filtered.length === 0;
+			gallery.empty.hidden = !gallery.expanded || filtered.length > 0;
+			gallery.status.textContent = `${gallery.page + 1} / ${pages}`;
+			gallery.status.setAttribute('aria-label', this.t('appearanceThemePage').replace('{page}', gallery.page + 1).replace('{pages}', pages));
+			gallery.previous.disabled = gallery.page === 0; gallery.next.disabled = gallery.page === pages - 1;
+			for (const button of gallery.filters) button.setAttribute('aria-pressed', String(button.dataset.themeFilter === gallery.filter));
+		}
+		for (const choice of choices) {
+			choice.label.hidden = !visible.includes(choice);
+			if (fieldset.hidden || choice.label.hidden) { choice.miniature?.remove(); choice.miniature = null; continue; }
+			if (!choice.miniature) { choice.miniature = this.reader(true); choice.content.prepend(choice.miniature); }
+			const sample = { ...this.values };
+			if (isTheme(key)) { sample.theme = choice.value; sample.layout = 'split'; } else {
+				sample[key] = choice.value;
+				if (key === 'style') { sample.layout = 'split'; sample.density = 'comfortable'; }
+				if (key === 'density') sample.layout = 'list';
+			}
+			this.paint(choice.miniature, sample);
+		}
 	}
 
 	description(key, value) {
@@ -207,14 +299,8 @@ export class AppearanceChoices {
 				choice.state.textContent = selected
 					? this.t(committed ? 'appearanceChoiceSaved' : 'appearanceChoiceSelected')
 					: committed ? this.t('appearanceChoiceSaved') : '';
-				const sample = { ...this.values };
-				if (isTheme(key)) { sample.theme = choice.value; sample.layout = 'split'; } else {
-					sample[key] = choice.value;
-					if (key === 'style') { sample.layout = 'split'; sample.density = 'comfortable'; }
-					if (key === 'density') sample.layout = 'list';
-				}
-				this.paint(choice.miniature, sample);
 			}
+			this.renderChoices(key);
 		}
 		if (this.preview) {
 			for (const [surface, miniature] of this.preview.surfaces) {
